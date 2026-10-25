@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="64" x2="904" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="50%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#2563EB" />
+    </linearGradient>
+  </defs>
+
+  <!-- Bright Sky-to-Cobalt Squircle Background -->
+  <rect x="56" y="56" width="912" height="912" rx="220" fill="url(#bg)" />
+
+  <!-- Single Rounded Eighth Note (Centered at 512, 512) -->
+  <path
+    d="M 464 352
+       C 464 314, 484 294, 518 285
+       L 688 240
+       C 720 231, 738 248, 738 280
+       L 738 342
+       C 738 376, 718 395, 686 404
+       L 546 441
+       C 518 449, 508 464, 508 494
+       L 508 660
+       C 508 724, 446 780, 372 780
+       C 314 780, 282 740, 282 690
+       C 282 622, 348 554, 418 554
+       C 432 554, 442 556, 450 558
+       C 460 560, 464 554, 464 540
+       Z"
+    fill="#FFFFFF"
+  />
+</svg>

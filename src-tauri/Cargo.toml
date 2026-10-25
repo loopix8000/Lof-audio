@@ -1,0 +1,28 @@
+[package]
+name = "lof-audio"
+version = "0.1.0-alpha.1"
+description = "Foobar2000 + YouTube Music Hybrid Desktop Music Player"
+authors = ["Lof Audio"]
+edition = "2021"
+
+[lib]
+name = "lof_audio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rodio = { version = "0.19", default-features = false, features = ["symphonia-all"] }
+symphonia = { version = "0.5.4", default-features = false, features = ["aac", "adpcm", "flac", "isomp4", "mp3", "pcm", "vorbis", "wav"] }
+lofty = "0.21"
+rusqlite = { version = "0.32", features = ["bundled"] }
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+base64 = "0.22"
+walkdir = "2.5"
+urlencoding = "2.1"

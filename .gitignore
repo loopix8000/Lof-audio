@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Frontend build output
+dist/
+dist-ssr/
+*.local
+
+# Rust / Tauri build output
+src-tauri/target/
+src-tauri/WixTools/
+
+# Logs & OS files
+*.log
+.DS_Store
+Thumbs.db
