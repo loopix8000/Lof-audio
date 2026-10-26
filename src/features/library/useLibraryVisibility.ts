@@ -37,7 +37,7 @@ export function useLibraryVisibility({ libraryState, notifications, trackEditorS
     event.preventDefault();
     event.stopPropagation();
     setCtxMenu(null);
-    setCollectionContextMenu({ target, x: Math.max(8, Math.min(event.clientX, window.innerWidth - 220)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 52)) });
+    setCollectionContextMenu({ target, x: event.clientX, y: event.clientY });
   };
 
   const handleHideItems = async (targets: HideTarget[]) => {

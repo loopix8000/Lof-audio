@@ -2374,6 +2374,15 @@ button svg {
   overflow-y: auto;
 }
 
+.native-menu--compact {
+  width: max-content;
+  min-width: 0;
+}
+
+.native-menu--compact .native-menu-item {
+  justify-content: flex-start;
+}
+
 .native-menu-item {
   width: 100%;
   height: 28px;
