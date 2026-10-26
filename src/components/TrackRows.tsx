@@ -18,6 +18,7 @@ interface Actions {
   onContext: (track: Track, event: React.MouseEvent) => void;
   onFavorite: (id: number, event: React.MouseEvent) => void;
   onSelectAlbum: (ids: number[]) => void;
+  onAlbumContext?: (group: AlbumGroup, event: React.MouseEvent) => void;
 }
 interface RowProps extends Actions {
   track: Track;
@@ -94,7 +95,7 @@ export const VirtualTrackTable = memo(function VirtualTrackTable(p: ListProps & 
   return <tbody ref={body}>{spacer(range.before)}{p.rows.slice(range.start, range.end).map(row => {
     if (row.kind === "album") {
       const g = row.group;
-      return <tr key={`album:${g.key}`} className="album-group-row" style={{ height: 60 }} onClick={() => p.onSelectAlbum(g.tracks.map(t => t.id))}><td colSpan={8}><div className="album-header-box">
+      return <tr key={`album:${g.key}`} className="album-group-row" style={{ height: 60 }} onContextMenu={event => p.onAlbumContext?.(g, event)} onClick={() => p.onSelectAlbum(g.tracks.map(t => t.id))}><td colSpan={8}><div className="album-header-box">
         <img className="album-header-art" src={g.cover} alt="" loading="lazy" /><div className="album-header-info"><span className="album-header-name">{g.album}</span><span className="album-header-meta">{g.artist}{g.year ? ` · ${g.year}` : ""} · {g.tracks.length}곡</span></div><div className="album-header-rule" />
       </div></td></tr>;
     }

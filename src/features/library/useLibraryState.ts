@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Track, Playlist, ScanProgress, Workspace, WorkspaceState, LibrarySnapshot } from "../../types";
+import { Track, Playlist, ScanProgress, Workspace, WorkspaceState, LibrarySnapshot, HiddenItem } from "../../types";
 import { DEFAULT_SETTINGS, FolderViewMode, SortField } from "../../settings";
 import { api, onLibraryScanProgress, onLibraryChanged, onAutomationLibraryChanged } from "../../api";
 import { mergeTrackChanges } from "../../library";
@@ -7,6 +7,7 @@ import { NavCategory, ContextMenuState } from "../../app/types";
 import type { NotificationsModel } from "../../app/useNotifications";
 import { useEvent } from "../../useEvent";
 import { scopeWorkspaceTracks, scopeWorkspacePlaylists, isFolderWithin } from "../workspaces/scope";
+import { isTrackHidden } from "./visibility";
 
 interface Inputs {
   notifications: NotificationsModel;
@@ -17,15 +18,16 @@ export function useLibraryState({
 }: Inputs) {
   const { notify } = notifications;
   const [allTracks, setTracks] = useState<Track[]>([]);
+  const [hiddenItems, setHiddenItems] = useState<HiddenItem[]>([]);
   const [allPlaylists, setPlaylists] = useState<Playlist[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(null);
   const workspaceRevisionRef = useRef(-1);
   const refreshingSnapshotRef = useRef(false);
   const activeWorkspace = useMemo(() => workspaces.find(w => w.id === activeWorkspaceId) ?? null, [workspaces, activeWorkspaceId]);
-  const folders = useMemo(() => activeWorkspace?.folders ?? [], [activeWorkspace]);
-  const tracks = useMemo(() => scopeWorkspaceTracks(allTracks, folders, activeWorkspace?.excludedTrackIds), [allTracks, folders, activeWorkspace]);
-  const playlists = useMemo(() => scopeWorkspacePlaylists(allPlaylists, activeWorkspaceId, tracks), [allPlaylists, activeWorkspaceId, tracks]);
+  const folders = useMemo(() => (activeWorkspace?.folders ?? []).filter(folder => !hiddenItems.some(item => item.kind === "folder" && isFolderWithin(folder, item.value))), [activeWorkspace, hiddenItems]);
+  const tracks = useMemo(() => scopeWorkspaceTracks(allTracks, folders, activeWorkspace?.excludedTrackIds).filter(track => !isTrackHidden(track, hiddenItems)), [allTracks, folders, activeWorkspace, hiddenItems]);
+  const playlists = useMemo(() => scopeWorkspacePlaylists(allPlaylists, activeWorkspaceId, tracks).filter(playlist => !hiddenItems.some(item => item.kind === "playlist" && item.value === String(playlist.id))), [allPlaylists, activeWorkspaceId, tracks, hiddenItems]);
 
   const applyWorkspaceState = useEvent((state: WorkspaceState, restoreSelection = true) => {
     if (state.workspaceRevision < workspaceRevisionRef.current) return;
@@ -52,6 +54,7 @@ export function useLibraryState({
       return;
     }
     setTracks(snapshot.tracks);
+    setHiddenItems(snapshot.hiddenItems ?? []);
     setPlaylists(snapshot.playlists);
     applyWorkspaceState(snapshot, restoreSelection);
   });
@@ -171,6 +174,7 @@ export function useLibraryState({
   }, []);
 
   return {
+    hiddenItems,
     tracks,
     navCategory,
     activePlaylistId,

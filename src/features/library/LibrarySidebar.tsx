@@ -30,6 +30,7 @@ export function LibrarySidebar() {
     handleRemoveFolder,
     handleAddFolder,
     handleAddFiles,
+    handleCollectionContextMenu,
   } = useAudioAppContext();
   return (showLeftSidebar && (
     <aside className="app-sidebar">
@@ -176,6 +177,7 @@ export function LibrarySidebar() {
         {playlists.map((pl) => (
           <div
             key={pl.id}
+                onContextMenu={event => handleCollectionContextMenu({ kind: "playlist", value: String(pl.id), label: pl.name }, event)}
             className={`sidebar-item ${!nowPlayingOpen &&
                 navCategory === "playlist" &&
                 activePlaylistId === pl.id
@@ -227,6 +229,7 @@ export function LibrarySidebar() {
           {folders.map((f) => (
             <div
               key={f}
+              onContextMenu={event => handleCollectionContextMenu({ kind: "folder", value: f, label: f }, event)}
               className="sidebar-item"
               style={{ fontSize: 11.5, cursor: "pointer" }}
               title={f}

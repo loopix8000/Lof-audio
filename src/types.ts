@@ -1,3 +1,13 @@
+export type HiddenKind = "track" | "folder" | "album" | "artist" | "playlist";
+
+export interface HideTarget {
+  kind: HiddenKind;
+  value: string;
+  label: string;
+}
+
+export interface HiddenItem extends HideTarget { id: number }
+
 export interface Track {
   id: number;
   filePath: string;
@@ -75,6 +85,7 @@ export interface AudioSkillStatus {
 }
 
 export interface LibrarySnapshot extends WorkspaceState {
+  hiddenItems: HiddenItem[];
   tracks: Track[];
   folders: string[];
   playlists: Playlist[];

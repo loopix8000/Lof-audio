@@ -1,5 +1,30 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum HiddenKind {
+    Track,
+    Folder,
+    Album,
+    Artist,
+    Playlist,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HiddenItem {
+    pub id: i64,
+    pub kind: HiddenKind,
+    pub value: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HideTarget {
+    pub kind: HiddenKind,
+    pub value: String,
+    pub label: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {

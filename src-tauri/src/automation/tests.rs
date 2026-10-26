@@ -68,6 +68,7 @@ fn fixture(root: &Path) -> (Arc<AppState>, i64) {
             app_data_dir: root.to_path_buf(),
             scanner,
             metadata_lock: Mutex::new(()),
+            visibility_lock: tokio::sync::RwLock::new(()),
         }),
         id,
     )

@@ -20,6 +20,7 @@ export function CollectionBrowser() {
     playlists,
     activePlaylistId,
     setActivePlaylistId,
+    handleCollectionContextMenu,
   } = useAudioAppContext();
   return (<div className="pm-browser-pane">
     <div className="pm-browser-tabs">
@@ -57,6 +58,7 @@ export function CollectionBrowser() {
           return (
             <div
               key={alb.album}
+              onContextMenu={event => handleCollectionContextMenu({ kind: "album", value: alb.album, label: alb.album }, event)}
               className={`pm-browser-item ${isCurrent ? "active" : ""
                 }`}
               onClick={() => {
@@ -146,6 +148,7 @@ export function CollectionBrowser() {
             return (
               <div
                 key={pl.id}
+                onContextMenu={event => handleCollectionContextMenu({ kind: "playlist", value: String(pl.id), label: pl.name }, event)}
                 className={`pm-browser-item ${isCurrent ? "active" : ""
                   }`}
                 onClick={() => {
@@ -177,6 +180,7 @@ export function CollectionBrowser() {
           return (
             <div
               key={art.artist}
+              onContextMenu={event => handleCollectionContextMenu({ kind: "artist", value: art.artist, label: art.artist }, event)}
               className={`pm-browser-item ${isCurrent ? "active" : ""
                 }`}
               onClick={() => {
@@ -224,6 +228,7 @@ export function CollectionBrowser() {
           return (
             <div
               key={fld.folderPath}
+              onContextMenu={event => handleCollectionContextMenu({ kind: "folder", value: fld.folderPath, label: fld.folderPath }, event)}
               className={`pm-browser-item ${isCurrent ? "active" : ""
                 }`}
               onClick={() => {

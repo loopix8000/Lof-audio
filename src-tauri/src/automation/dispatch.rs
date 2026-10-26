@@ -1,24 +1,34 @@
 use crate::{
     metadata,
-    models::{Track, Workspace},
+    models::{Track, Workspace, WorkspaceState, PlaybackState},
     operations, skills, AppState,
 };
 use serde_json::{json, Value};
 use std::{collections::HashSet, path::Path};
 
-pub fn folder_key(path: &str) -> String {
-    let path = path
-        .strip_prefix(r"\\?\UNC\")
-        .map(|p| format!("//{p}"))
-        .unwrap_or_else(|| path.strip_prefix(r"\\?\").unwrap_or(path).to_string());
-    let key = path.replace('\\', "/").trim_end_matches('/').to_string();
-    if key.starts_with("//") || key.as_bytes().get(1) == Some(&b':') {
-        key.to_lowercase()
-    } else if key.is_empty() {
-        "/".into()
-    } else {
-        key
+pub use crate::visibility::folder_key;
+
+fn public_workspace_state(state: &AppState) -> Result<WorkspaceState, String> {
+    let visibility = state.db.visibility()?;
+    let visible: HashSet<_> = state.db.get_all_tracks()?.into_iter().map(|track| track.id).collect();
+    let mut result = state.db.get_workspace_state()?;
+    for workspace in &mut result.workspaces {
+        workspace.folders.retain(|folder| visibility.allows_folder(folder));
+        workspace.excluded_track_ids.retain(|id| visible.contains(id));
     }
+    Ok(result)
+}
+
+fn public_playback(state: &AppState, mut playback: PlaybackState) -> PlaybackState {
+    if playback.current_track_id.is_some_and(|id| state.db.get_public_track(id).is_err()) {
+        playback.current_track_id = None;
+        playback.file_path = None;
+        playback.is_playing = false;
+        playback.position_secs = 0.0;
+        playback.duration_secs = 0.0;
+        playback.is_ended = false;
+    }
+    playback
 }
 
 pub fn contains(workspace: &Workspace, track: &Track) -> bool {
@@ -56,6 +66,9 @@ pub(super) fn require_track(state: &AppState, workspace_id: i64, id: i64) -> Res
 
 fn require_playlist(state: &AppState, workspace_id: i64, id: i64) -> Result<(), String> {
     workspace(state, workspace_id)?;
+    if !state.db.visibility()?.allows_playlist(id) {
+        return Err("NOT_FOUND: 플레이리스트를 찾을 수 없습니다.".into());
+    }
     if !state
         .db
         .get_playlists()?
@@ -77,7 +90,8 @@ fn playlists(state: &AppState, id: i64) -> Result<Value, String> {
         .map(|t| t.id)
         .collect();
     let mut playlists = state.db.get_playlists()?;
-    playlists.retain(|p| p.workspace_id == id);
+    let visibility = state.db.visibility()?;
+    playlists.retain(|p| p.workspace_id == id && visibility.allows_playlist(p.id));
     for p in &mut playlists {
         p.track_ids.retain(|track_id| visible.contains(track_id));
     }
@@ -158,6 +172,7 @@ pub(super) fn apply_track_changes(
 }
 
 pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, String> {
+    let _visibility = state.visibility_lock.read().await;
     let definition = super::tools::definitions()
         .as_array()
         .unwrap()
@@ -177,20 +192,25 @@ pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, S
     };
     let ws = integer("workspaceId");
     let id = integer("trackId");
-    Ok(match tool {
+    let result = match tool {
         "app_status" => {
-            json!({"name":"Lof Audio","version":env!("CARGO_PKG_VERSION"),"workspaceState":state.db.get_workspace_state()?,"scan":state.scanner.status()})
+            let visibility = state.db.visibility()?;
+            json!({"name":"Lof Audio","version":env!("CARGO_PKG_VERSION"),"workspaceState":public_workspace_state(state)?,"scan":state.scanner.status().filter(|scan| visibility.allows_folder(&scan.folder))})
         }
-        "workspace_list" => json!(state.db.get_workspace_state()?),
-        "workspace_create" => json!(state.db.create_workspace(&string("name"))?),
-        "workspace_rename" => json!(state.db.rename_workspace(ws, &string("name"))?),
-        "workspace_select" => json!(state.db.select_workspace(ws)?),
+        "workspace_list" => json!(public_workspace_state(state)?),
+        "workspace_create" => { state.db.create_workspace(&string("name"))?; json!(public_workspace_state(state)?) }
+        "workspace_rename" => { state.db.rename_workspace(ws, &string("name"))?; json!(public_workspace_state(state)?) }
+        "workspace_select" => { state.db.select_workspace(ws)?; json!(public_workspace_state(state)?) }
         "workspace_delete" => {
             let _guard = state.metadata_lock.lock().map_err(|e| e.to_string())?;
-            json!(state.db.delete_workspace(ws)?)
+            state.db.delete_workspace(ws)?;
+            json!(public_workspace_state(state)?)
         }
         "folder_add" | "folder_remove" => {
             let path = string("folderPath");
+            if !state.db.visibility()?.allows_folder(&path) {
+                return Err("NOT_FOUND: 폴더를 찾을 수 없습니다.".into());
+            }
             if !Path::new(&path).is_absolute() {
                 return Err("INVALID_ARGUMENT: 폴더의 절대 경로가 필요합니다.".into());
             }
@@ -199,7 +219,7 @@ pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, S
             } else {
                 operations::remove_folder(path, ws, state).await?;
             }
-            json!(state.db.get_workspace_state()?)
+            json!(public_workspace_state(state)?)
         }
         "library_rescan" => {
             operations::rescan_library(args["force"].as_bool().unwrap_or(false), ws, state).await?;
@@ -207,8 +227,9 @@ pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, S
         }
         "scan_status" => {
             let workspace = workspace(state, ws)?;
+            let visibility = state.db.visibility()?;
             let progress = state.scanner.status().filter(|p| {
-                workspace
+                visibility.allows_folder(&p.folder) && workspace
                     .folders
                     .iter()
                     .any(|f| folder_key(f) == folder_key(&p.folder))
@@ -218,7 +239,7 @@ pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, S
                 .pending_folders()
                 .into_iter()
                 .filter(|p| {
-                    workspace
+                    visibility.allows_folder(p) && workspace
                         .folders
                         .iter()
                         .any(|f| folder_key(f) == folder_key(p))
@@ -263,7 +284,7 @@ pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, S
                 require_track(state, ws, *id)?;
             }
             operations::delete_tracks_from_library(ids, ws, state).await?;
-            json!(state.db.get_workspace_state()?)
+            json!(public_workspace_state(state)?)
         }
         "track_favorite" => {
             require_track(state, ws, id)?;
@@ -330,6 +351,7 @@ pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, S
         }
         "playlist_remove_track" => {
             require_playlist(state, ws, integer("playlistId"))?;
+            require_track(state, ws, id)?;
             operations::remove_track_from_playlist(integer("playlistId"), id, state).await?;
             playlists(state, ws)?
         }
@@ -341,5 +363,11 @@ pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, S
             args["expectedInstalledRevision"].as_str(),
         )?,
         _ => return Err("UNKNOWN_TOOL: 지원하지 않는 도구입니다.".into()),
-    })
+    };
+    if tool.starts_with("playback_") {
+        let playback = serde_json::from_value(result).map_err(|e| e.to_string())?;
+        Ok(json!(public_playback(state, playback)))
+    } else {
+        Ok(result)
+    }
 }

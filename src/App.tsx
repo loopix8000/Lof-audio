@@ -4,6 +4,7 @@ import { Titlebar } from "./features/layout/Titlebar";
 import { LibraryLayout } from "./features/layout/LibraryLayout";
 import { CompactPlayer } from "./features/layout/CompactPlayer";
 import { TrackContextMenu } from "./features/library/TrackContextMenu";
+import { CollectionContextMenu } from "./features/library/CollectionContextMenu";
 import { TrackPropertiesDialog } from "./features/track-editor/TrackPropertiesDialog";
 import { SettingsDialog } from "./features/settings/SettingsDialog";
 import { CoverPreview } from "./features/metadata/CoverPreview";
@@ -18,6 +19,7 @@ export function App() {
         <LibraryLayout />
         <CompactPlayer />
         <TrackContextMenu />
+        <CollectionContextMenu />
         <TrackPropertiesDialog />
         <SettingsDialog />
         <CoverPreview />

@@ -10,6 +10,7 @@ mod skills;
 pub mod tags;
 pub mod updater;
 mod workspaces;
+mod visibility;
 
 use audio::AudioEngine;
 use db::Database;
@@ -30,6 +31,7 @@ pub struct AppState {
     pub app_data_dir: PathBuf,
     pub scanner: ScanQueue,
     pub metadata_lock: Mutex<()>,
+    pub visibility_lock: tokio::sync::RwLock<()>,
 }
 
 #[derive(Serialize)]
@@ -38,6 +40,7 @@ pub struct LibrarySnapshot {
     pub tracks: Vec<Track>,
     pub folders: Vec<String>,
     pub playlists: Vec<Playlist>,
+    pub hidden_items: Vec<models::HiddenItem>,
     #[serde(flatten)]
     pub workspace_state: WorkspaceState,
 }
@@ -72,16 +75,42 @@ fn edit_track(
 }
 
 fn build_snapshot(state: &AppState) -> Result<LibrarySnapshot, String> {
+    let visibility = state.db.visibility()?;
     let tracks = state.db.get_all_tracks()?;
-    let folders = state.db.get_folders()?;
-    let playlists = state.db.get_playlists()?;
+    let folders = state.db.get_folders()?.into_iter().filter(|folder| visibility.allows_folder(folder)).collect();
+    let playlists = state.db.get_playlists()?.into_iter().filter(|playlist| visibility.allows_playlist(playlist.id)).collect();
     let workspace_state = state.db.get_workspace_state()?;
     Ok(LibrarySnapshot {
         tracks,
         folders,
         playlists,
+        hidden_items: state.db.get_hidden_items()?,
         workspace_state,
     })
+}
+
+#[tauri::command]
+async fn hide_library_items(targets: Vec<models::HideTarget>, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<LibrarySnapshot, String> {
+    let _visibility = state.visibility_lock.write().await;
+    {
+        let _metadata = state.metadata_lock.lock().map_err(|e| e.to_string())?;
+        state.db.hide_items(targets)?;
+    }
+    if let Ok(playback) = operations::get_playback_state(&state).await {
+        if playback.current_track_id.is_some_and(|id| state.db.get_public_track(id).is_err()) {
+            let _ = operations::stop_playback(&state).await;
+        }
+    }
+    tauri::Emitter::emit(&app, "automation-library-changed", ()).map_err(|e| e.to_string())?;
+    build_snapshot(&state)
+}
+
+#[tauri::command]
+async fn unhide_library_item(id: i64, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<LibrarySnapshot, String> {
+    let _visibility = state.visibility_lock.write().await;
+    state.db.unhide_item(id)?;
+    tauri::Emitter::emit(&app, "automation-library-changed", ()).map_err(|e| e.to_string())?;
+    build_snapshot(&state)
 }
 
 #[tauri::command]
@@ -452,6 +481,7 @@ pub fn run() {
                 app_data_dir,
                 scanner,
                 metadata_lock: Mutex::new(()),
+                visibility_lock: tokio::sync::RwLock::new(()),
             };
 
             app.manage(state);
@@ -474,6 +504,8 @@ pub fn run() {
             automation::install_audio_skill,
             get_library_state,
             get_library_tracks,
+            hide_library_items,
+            unhide_library_item,
             workspaces::create_workspace,
             workspaces::rename_workspace,
             workspaces::select_workspace,

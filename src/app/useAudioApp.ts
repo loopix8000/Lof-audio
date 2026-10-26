@@ -17,6 +17,7 @@ import { useLyricsEditor } from "../features/lyrics/useLyricsEditor";
 import { useLyricsDisplay } from "../features/lyrics/useLyricsDisplay";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { useWorkspaces } from "../features/workspaces/useWorkspaces";
+import { useLibraryVisibility } from "../features/library/useLibraryVisibility";
 
 export function useAudioApp() {
   const notifications = useNotifications();
@@ -32,6 +33,7 @@ export function useAudioApp() {
     notifications,
   });
   const workspaceActions = useWorkspaces({ libraryState, playbackState, trackEditorState, metadataState, windowLayout, notifications });
+  const visibility = useLibraryVisibility({ libraryState, notifications, trackEditorState });
   const libraryView = useLibraryView({
     libraryState,
   });
@@ -111,6 +113,7 @@ export function useAudioApp() {
     ...preferences,
     ...windowLayout,
     ...libraryState,
+    ...visibility,
     ...workspaceActions,
     ...libraryView,
     ...settingsSync,

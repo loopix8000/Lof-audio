@@ -6,6 +6,7 @@ use std::sync::Mutex;
 
 mod research;
 mod workspaces;
+mod visibility;
 
 /// Size and modification time (ms since epoch) of an audio file when it was indexed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -181,6 +182,14 @@ impl Database {
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS hidden_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL CHECK(kind IN ('track', 'folder', 'album', 'artist', 'playlist')),
+                value TEXT NOT NULL,
+                label TEXT NOT NULL,
+                UNIQUE(kind, value)
             );
 
             CREATE TABLE IF NOT EXISTS metadata_research_log (
@@ -539,6 +548,7 @@ impl Database {
     }
 
     pub fn get_all_tracks(&self) -> Result<Vec<Track>, String> {
+        let visibility = self.visibility()?;
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let sql = format!(
             "SELECT {} FROM tracks ORDER BY album, COALESCE(track_number, 9999), file_name, title",
@@ -548,8 +558,8 @@ impl Database {
         let rows = stmt
             .query_map([], track_from_row)
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())
+        let tracks = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+        Ok(tracks.into_iter().filter(|track| visibility.allows_track(track)).collect())
     }
 
     pub fn get_track_by_id(&self, track_id: i64) -> Result<Option<Track>, String> {
@@ -557,11 +567,14 @@ impl Database {
     }
 
     pub fn get_public_track(&self, track_id: i64) -> Result<Track, String> {
+        let visibility = self.visibility()?;
         self.get_track(track_id, false)?
-            .ok_or_else(|| "트랙을 찾을 수 없습니다.".to_string())
+            .filter(|track| visibility.allows_track(track))
+            .ok_or_else(|| "NOT_FOUND: 트랙을 찾을 수 없습니다.".to_string())
     }
 
     pub fn get_public_tracks(&self, ids: &[i64]) -> Result<Vec<Track>, String> {
+        let visibility = self.visibility()?;
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let sql = format!("SELECT {} FROM tracks WHERE id = ?1", track_columns(false));
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -572,7 +585,7 @@ impl Database {
                 .optional()
                 .map_err(|e| e.to_string())?
             {
-                tracks.push(track);
+                if visibility.allows_track(&track) { tracks.push(track); }
             }
         }
         Ok(tracks)
@@ -590,6 +603,10 @@ impl Database {
     }
 
     pub fn get_cover(&self, track_id: i64) -> Result<Option<String>, String> {
+        let visibility = self.visibility()?;
+        if !self.get_track(track_id, false)?.is_some_and(|track| visibility.allows_track(&track)) {
+            return Ok(None);
+        }
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         conn.query_row(
             "SELECT cover_data_url FROM tracks WHERE id = ?1",

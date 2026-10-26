@@ -37,6 +37,7 @@ export function LibraryBrowser() {
     folders,
     tracks,
     openAlbumMatchDialog,
+    handleCollectionContextMenu,
   } = useAudioAppContext();
   return (<div className="main-column">
     <div className="surface-header">
@@ -60,7 +61,11 @@ export function LibraryBrowser() {
               </span>
             </button>
           )}
-        <span className="surface-title" title={currentViewTitle}>
+        <span className="surface-title" title={currentViewTitle} onContextMenu={event => {
+          if (subFilter !== null && (navCategory === "folders" || navCategory === "albums" || navCategory === "artists")) {
+            handleCollectionContextMenu({ kind: navCategory === "folders" ? "folder" : navCategory === "albums" ? "album" : "artist", value: subFilter, label: currentViewTitle || subFilter }, event);
+          }
+        }}>
           {currentViewTitle}
         </span>
         <span className="surface-subtitle">
@@ -163,6 +168,7 @@ export function LibraryBrowser() {
           <div
             key={card.artist}
             className="album-card-item"
+            onContextMenu={event => handleCollectionContextMenu({ kind: "artist", value: card.artist, label: card.artist }, event)}
             onClick={() => {
               setSubFilter(card.artist);
             }}
@@ -189,6 +195,7 @@ export function LibraryBrowser() {
           <div
             key={card.album}
             className="album-card-item"
+            onContextMenu={event => handleCollectionContextMenu({ kind: "album", value: card.album, label: card.album }, event)}
             onClick={() => {
               setSubFilter(card.album);
             }}
@@ -215,6 +222,7 @@ export function LibraryBrowser() {
           <div
             key={card.folderPath}
             className="album-card-item"
+            onContextMenu={event => handleCollectionContextMenu({ kind: "folder", value: card.folderPath, label: card.folderPath }, event)}
             onClick={() => {
               setSubFilter(card.folderPath);
             }}
@@ -252,7 +260,7 @@ export function LibraryBrowser() {
       >
         <table className="track-grid">
           <TrackTableHeader />
-          <VirtualTrackTable rows={tableEntries} grouped={effectiveLibView === "grouped"} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={handleRowClick} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} />
+          <VirtualTrackTable onAlbumContext={(group, event) => handleCollectionContextMenu({ kind: "album", value: group.album || "Unknown Album", label: group.album || "Unknown Album" }, event)} rows={tableEntries} grouped={effectiveLibView === "grouped"} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={handleRowClick} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} />
         </table>
       </div>
     )}

@@ -2322,6 +2322,8 @@ button svg {
   border-radius: 8px;
   box-shadow: var(--shadow-float);
   padding: 4px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
 }
 
 .native-menu-item {
@@ -2352,6 +2354,9 @@ button svg {
   background: var(--accent);
   color: #ffffff;
 }
+
+.native-menu-item:disabled { opacity: .5; cursor: default; }
+.hidden-item-kind { flex: 0 0 55px; color: var(--text-muted); font-size: 11px; }
 
 .native-menu-item:hover .menu-kbd {
   color: rgba(255, 255, 255, 0.85);

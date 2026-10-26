@@ -1,4 +1,5 @@
 import { api } from "../../api";
+import { useLayoutEffect, useRef } from "react";
 import { useAudioAppContext } from "../../app/AppContext";
 
 export function TrackContextMenu() {
@@ -13,10 +14,18 @@ export function TrackContextMenu() {
     notify,
     handleDeleteSelected,
     navCategory,
+    handleHideSelected,
+    visibilityBusy,
   } = useAudioAppContext();
+  const menuRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (menu && ctxMenu) menu.style.top = `${Math.max(8, Math.min(ctxMenu.y, window.innerHeight - menu.getBoundingClientRect().height - 8))}px`;
+  }, [ctxMenu, playlists.length]);
   return (ctxMenu && (
     <div
       className="native-menu"
+      ref={menuRef}
       style={{ left: ctxMenu.x, top: ctxMenu.y }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -95,6 +104,13 @@ export function TrackContextMenu() {
       )}
 
       <div className="native-menu-sep" />
+      <button
+        className="native-menu-item"
+        onClick={() => void handleHideSelected()}
+        disabled={visibilityBusy}
+      >
+        <span>{selectedIds.length > 1 ? `선택한 ${selectedIds.length}곡 숨기기` : "숨기기"}</span>
+      </button>
       <button
         className="native-menu-item"
         onClick={() => {

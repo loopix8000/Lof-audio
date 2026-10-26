@@ -125,10 +125,7 @@ pub(crate) async fn delete_tracks_from_library(
 }
 
 pub(crate) async fn play_track(track_id: i64, state: &AppState) -> Result<PlaybackState, String> {
-    let track = state
-        .db
-        .get_track_by_id(track_id)?
-        .ok_or_else(|| "트랙을 찾을 수 없습니다.".to_string())?;
+    let track = state.db.get_public_track(track_id)?;
 
     let (tx, rx) = mpsc::channel();
     state.audio.send_cmd(AudioCommand::Play {

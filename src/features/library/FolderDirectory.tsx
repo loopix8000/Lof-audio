@@ -12,6 +12,7 @@ export function FolderDirectory() {
     folders, tracks, subFilter, setSubFilter, tableEntries, displayedTracks,
     selectedIdSet, playback, handleRowClick, handlePlayTrack, handleRowContextMenu,
     handleToggleFavorite, setSelectedIds,
+    handleCollectionContextMenu,
   } = useAudioAppContext();
   const roots = useMemo(() => buildFolderTree(folders, tracks), [folders, tracks]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -39,7 +40,7 @@ export function FolderDirectory() {
     const selected = subFilter !== null && normalizeFolderPath(subFilter) === key;
     return (
       <div key={key}>
-        <div className={`folder-directory-row ${selected ? "active" : ""}`} style={{ paddingLeft: 6 + depth * 16 }}>
+        <div className={`folder-directory-row ${selected ? "active" : ""}`} style={{ paddingLeft: 6 + depth * 16 }} onContextMenu={event => handleCollectionContextMenu({ kind: "folder", value: node.path, label: node.path }, event)}>
           {node.children.length > 0 ? (
             <button
               className="folder-directory-toggle"
