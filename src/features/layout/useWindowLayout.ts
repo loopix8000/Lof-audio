@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { watchWindowMaximized, toggleWindowPin } from "../../api";
+import { watchWindowMaximized, toggleWindowPin, minimizeToTray } from "../../api";
 import { DEFAULT_SETTINGS } from "../../settings";
 import { AppViewMode } from "../../app/types";
 import type { NotificationsModel } from "../../app/useNotifications";
@@ -238,6 +238,14 @@ export function useWindowLayout({
     notify(next ? "창 항상 위에 고정 켜짐" : "창 항상 위에 고정 꺼짐");
   };
 
+  const handleMinimizeToTray = async () => {
+    try {
+      await minimizeToTray();
+    } catch (error) {
+      notify(`트레이로 접기 실패: ${error}`);
+    }
+  };
+
   return {
     appMode,
     showRightLyricsInLib,
@@ -255,6 +263,7 @@ export function useWindowLayout({
     colWidths,
     setNowPlayingOpen,
     handleTogglePin,
+    handleMinimizeToTray,
     isMaximized,
     npHeroPaneRef,
     npLyricsPaneRef,

@@ -1,6 +1,6 @@
 [package]
 name = "lof-audio"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 description = "Local music library, tag editor and synced lyrics player"
 authors = ["Lof Audio"]
 edition = "2021"
@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

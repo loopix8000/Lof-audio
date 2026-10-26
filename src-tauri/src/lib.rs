@@ -8,6 +8,7 @@ pub mod scanner;
 pub mod services;
 mod skills;
 pub mod tags;
+mod tray;
 pub mod updater;
 mod workspaces;
 mod visibility;
@@ -499,6 +500,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            tray::minimize_to_tray,
             automation::get_automation_info,
             automation::get_audio_skill_status,
             automation::install_audio_skill,

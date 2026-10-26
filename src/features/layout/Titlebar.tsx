@@ -1,5 +1,5 @@
 import { toggleMaximizeWindow, startWindowDrag, minimizeWindow, closeWindow } from "../../api";
-import { PanelLeft, Pin, Settings as SettingsIcon, Moon, Sun, Minus, Square, X } from "lucide-react";
+import { PanelLeft, PanelBottomClose, Pin, Settings as SettingsIcon, Moon, Sun, Minus, Square, X } from "lucide-react";
 import { useAudioAppContext } from "../../app/AppContext";
 
 export function Titlebar() {
@@ -9,6 +9,7 @@ export function Titlebar() {
     setShowLeftSidebar,
     alwaysOnTop,
     handleTogglePin,
+    handleMinimizeToTray,
     settingsOpen,
     openSettings,
     updater,
@@ -90,6 +91,9 @@ export function Titlebar() {
       </div>
 
       <div className="win-controls">
+        <button className="win-btn" onClick={handleMinimizeToTray} title="트레이로 접기" aria-label="트레이로 접기">
+          <PanelBottomClose size={14} />
+        </button>
         <button className="win-btn" onClick={minimizeWindow} title="최소화">
           <Minus size={14} />
         </button>

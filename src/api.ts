@@ -41,6 +41,11 @@ export async function minimizeWindow(): Promise<void> {
   await getCurrentWindow().minimize();
 }
 
+export async function minimizeToTray(): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("minimize_to_tray");
+}
+
 export async function toggleMaximizeWindow(): Promise<void> {
   if (!isTauri()) return;
   await getCurrentWindow().toggleMaximize();
