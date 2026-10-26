@@ -4,6 +4,7 @@ version = "0.1.0-beta.3"
 description = "Local music library, tag editor and synced lyrics player"
 authors = ["Lof Audio"]
 edition = "2021"
+license = "MIT"
 
 [lib]
 name = "lof_audio_lib"

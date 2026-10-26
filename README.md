@@ -63,4 +63,6 @@ npm run tauri build
 
 ## 라이선스
 
+Lof Audio 자체 소스는 [MIT 라이선스](LICENSE)로 제공합니다.
+
 사용 중인 외부 소프트웨어의 라이선스와 저작권 고지는 [오픈소스 라이선스 고지](THIRD_PARTY_NOTICES.md)를 참고하세요.
