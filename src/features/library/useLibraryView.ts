@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Track } from "../../types";
 import { getFallbackCoverUrl } from "../../utils/lrc";
 import { TableEntry } from "../../components/TrackRows";
@@ -11,9 +11,19 @@ interface Inputs {
   libraryState: LibraryStateModel;
 }
 
+const NO_COLLAPSED_ALBUMS: ReadonlySet<string> = new Set();
+
 export function useLibraryView({
   libraryState,
 }: Inputs) {
+  const { activeWorkspaceId } = libraryState;
+  const [albumCollapse, setAlbumCollapse] = useState<{
+    workspaceId: number | null;
+    keys: Set<string>;
+  }>({ workspaceId: activeWorkspaceId, keys: new Set() });
+  const collapsedAlbums = albumCollapse.workspaceId === activeWorkspaceId
+    ? albumCollapse.keys
+    : NO_COLLAPSED_ALBUMS;
   const {
     tracks,
     navCategory,
@@ -279,18 +289,46 @@ export function useLibraryView({
     return Array.from(map.values());
   }, [displayedTracks]);
 
+  const toggleAlbumGroup = useCallback((key: string) => {
+    setAlbumCollapse(previous => {
+      const keys = new Set(previous.workspaceId === activeWorkspaceId ? previous.keys : []);
+      if (keys.has(key)) keys.delete(key);
+      else keys.add(key);
+      return { workspaceId: activeWorkspaceId, keys };
+    });
+  }, [activeWorkspaceId]);
+
+  const setAllAlbumGroupsCollapsed = useCallback((collapsed: boolean) => {
+    setAlbumCollapse(previous => {
+      const keys = new Set(previous.workspaceId === activeWorkspaceId ? previous.keys : []);
+      for (const group of albumGroups) {
+        if (collapsed) keys.add(group.key);
+        else keys.delete(group.key);
+      }
+      return { workspaceId: activeWorkspaceId, keys };
+    });
+  }, [activeWorkspaceId, albumGroups]);
+
+  const collapsedAlbumCount = albumGroups.reduce(
+    (count, group) => count + Number(collapsedAlbums.has(group.key)), 0,
+  );
+
   const tableEntries = useMemo<TableEntry[]>(() => {
     const entries: TableEntry[] = [];
     if (effectiveLibView === "grouped") {
       for (const group of albumGroups) {
-        entries.push({ kind: "album", group });
-        group.tracks.forEach((track, index) => entries.push({ kind: "track", track, index, previous: group.tracks[index - 1]?.id, next: group.tracks[index + 1]?.id }));
+        const collapsed = collapsedAlbums.has(group.key);
+        entries.push({ kind: "album", group, collapsed });
+        if (!collapsed) group.tracks.forEach((track, index) => entries.push({ kind: "track", track, index, previous: group.tracks[index - 1]?.id, next: group.tracks[index + 1]?.id }));
       }
     } else {
       displayedTracks.forEach((track, index) => entries.push({ kind: "track", track, index, previous: displayedTracks[index - 1]?.id, next: displayedTracks[index + 1]?.id }));
     }
     return entries;
-  }, [effectiveLibView, albumGroups, displayedTracks]);
+  }, [effectiveLibView, albumGroups, displayedTracks, collapsedAlbums]);
+
+  const visibleAlbumTrackIds = useMemo(() => tableEntries.flatMap(entry =>
+    entry.kind === "track" ? [entry.track.id] : []), [tableEntries]);
 
   const libraryCounts = useMemo(() => ({
     favorites: tracks.filter(t => t.isFavorite).length,
@@ -327,6 +365,11 @@ export function useLibraryView({
     directoryFolders,
     totalDisplayedDuration,
     tableEntries,
+    albumGroupCount: albumGroups.length,
+    collapsedAlbumCount,
+    toggleAlbumGroup,
+    setAllAlbumGroupsCollapsed,
+    visibleAlbumTrackIds,
   };
 }
 

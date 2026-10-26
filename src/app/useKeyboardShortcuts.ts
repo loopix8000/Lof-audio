@@ -38,17 +38,18 @@ export function useKeyboardShortcuts({
   const { coverZoom, setCoverZoom } = metadataState;
   const { settingsOpen, setSettingsOpen } = preferences;
   const { dialogOpen, setDialogOpen } = trackEditorState;
-  const { nowPlayingOpen, setNowPlayingOpen } = windowLayout;
+  const { appMode, nowPlayingOpen, setNowPlayingOpen } = windowLayout;
   const { handleTogglePlay, handlePlayTrack, handleSeek } = playbackControls;
   const { openPropertiesDialog } = trackEditor;
   const { selectedIds, setSelectedIds } = libraryState;
-  const { displayedTracks } = libraryView;
+  const { displayedTracks, effectiveLibView, visibleAlbumTrackIds } = libraryView;
   const { handleDeleteSelected } = libraryActions;
   const { playback } = playbackState;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.code === "Space" || e.code === "Enter") && (e.target as HTMLElement)?.closest("button")) return;
 
       if (e.code === "Escape" && coverZoom) {
         setCoverZoom(null);
@@ -79,7 +80,8 @@ export function useKeyboardShortcuts({
         handlePlayTrack(selectedIds[0]);
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        setSelectedIds(displayedTracks.map((t) => t.id));
+        setSelectedIds(appMode === "library" && !nowPlayingOpen && effectiveLibView === "grouped"
+          ? visibleAlbumTrackIds : displayedTracks.map((t) => t.id));
       } else if (e.code === "Delete" && selectedIds.length > 0) {
         e.preventDefault();
         handleDeleteSelected();
@@ -93,6 +95,6 @@ export function useKeyboardShortcuts({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [playback, selectedIds, displayedTracks, dialogOpen, nowPlayingOpen, coverZoom, settingsOpen]);
+  }, [playback, selectedIds, displayedTracks, visibleAlbumTrackIds, effectiveLibView, appMode, dialogOpen, nowPlayingOpen, coverZoom, settingsOpen]);
 
 }

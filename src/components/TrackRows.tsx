@@ -1,5 +1,5 @@
 import React, { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Heart } from "lucide-react";
+import { ChevronDown, ChevronRight, Heart } from "lucide-react";
 import { Track } from "../types";
 import { formatDuration, getFallbackCoverUrl } from "../utils/lrc";
 
@@ -11,7 +11,7 @@ export interface AlbumGroup {
   cover: string;
   tracks: Track[];
 }
-export type TableEntry = { kind: "album"; group: AlbumGroup } | { kind: "track"; track: Track; index: number; previous?: number; next?: number };
+export type TableEntry = { kind: "album"; group: AlbumGroup; collapsed: boolean } | { kind: "track"; track: Track; index: number; previous?: number; next?: number };
 interface Actions {
   onSelect: (id: number, event: React.MouseEvent) => void;
   onPlay: (id: number) => void;
@@ -19,6 +19,7 @@ interface Actions {
   onFavorite: (id: number, event: React.MouseEvent) => void;
   onSelectAlbum: (ids: number[]) => void;
   onAlbumContext?: (group: AlbumGroup, event: React.MouseEvent) => void;
+  onToggleAlbum?: (key: string) => void;
 }
 interface RowProps extends Actions {
   track: Track;
@@ -96,6 +97,9 @@ export const VirtualTrackTable = memo(function VirtualTrackTable(p: ListProps & 
     if (row.kind === "album") {
       const g = row.group;
       return <tr key={`album:${g.key}`} className="album-group-row" style={{ height: 60 }} onContextMenu={event => p.onAlbumContext?.(g, event)} onClick={() => p.onSelectAlbum(g.tracks.map(t => t.id))}><td colSpan={8}><div className="album-header-box">
+        <button type="button" className="album-group-toggle" aria-label={`${g.album || "Unknown Album"} ${row.collapsed ? "펼치기" : "접기"}`} aria-expanded={!row.collapsed} onClick={event => { event.stopPropagation(); p.onToggleAlbum?.(g.key); }}>
+          {row.collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+        </button>
         <img className="album-header-art" src={g.cover} alt="" loading="lazy" /><div className="album-header-info"><span className="album-header-name">{g.album}</span><span className="album-header-meta">{g.artist}{g.year ? ` · ${g.year}` : ""} · {g.tracks.length}곡</span></div><div className="album-header-rule" />
       </div></td></tr>;
     }

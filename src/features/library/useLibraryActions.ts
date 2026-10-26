@@ -55,9 +55,9 @@ export function useLibraryActions({
     }
   };
 
-  const handleRowClick = useEvent((trackId: number, e: React.MouseEvent) => {
+  const handleRowClick = useEvent((trackId: number, e: React.MouseEvent, visibleIds?: number[]) => {
     if (e.shiftKey && lastClickedId !== null) {
-      const ids = displayedTracks.map((t) => t.id);
+      const ids = visibleIds ?? displayedTracks.map((t) => t.id);
       const a = ids.indexOf(lastClickedId);
       const b = ids.indexOf(trackId);
       if (a !== -1 && b !== -1) {

@@ -1309,6 +1309,16 @@ button svg {
   flex-shrink: 0;
 }
 
+.album-group-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
 .chip-strip {
   display: flex;
   align-items: center;
@@ -1427,6 +1437,28 @@ button svg {
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+.album-group-toggle {
+  width: 24px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.album-group-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.album-group-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .album-header-art {

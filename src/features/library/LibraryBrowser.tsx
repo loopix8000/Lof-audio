@@ -30,6 +30,11 @@ export function LibraryBrowser() {
     handlePlayTrack,
     setSelectedIds,
     tableEntries,
+    albumGroupCount,
+    collapsedAlbumCount,
+    toggleAlbumGroup,
+    setAllAlbumGroupsCollapsed,
+    visibleAlbumTrackIds,
     selectedIdSet,
     playback,
     handleRowClick,
@@ -138,6 +143,13 @@ export function LibraryBrowser() {
         </button>
       </div>
     </div>
+
+    {effectiveLibView === "grouped" && albumGroupCount > 0 && (
+      <div className="album-group-controls" role="group" aria-label="앨범 묶음 표시">
+        <button className="ui-btn" disabled={collapsedAlbumCount === albumGroupCount} onClick={() => setAllAlbumGroupsCollapsed(true)}>전체 접기</button>
+        <button className="ui-btn" disabled={collapsedAlbumCount === 0} onClick={() => setAllAlbumGroupsCollapsed(false)}>전체 펼치기</button>
+      </div>
+    )}
 
     {effectiveLibView === "folder-directory" ? (
       <FolderDirectory />
@@ -264,7 +276,7 @@ export function LibraryBrowser() {
       >
         <table className="track-grid">
           <TrackTableHeader />
-          <VirtualTrackTable onAlbumContext={(group, event) => handleCollectionContextMenu({ kind: "album", value: group.album || "Unknown Album", label: group.album || "Unknown Album" }, event)} rows={tableEntries} grouped={effectiveLibView === "grouped"} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={handleRowClick} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} />
+          <VirtualTrackTable onAlbumContext={(group, event) => handleCollectionContextMenu({ kind: "album", value: group.album || "Unknown Album", label: group.album || "Unknown Album" }, event)} rows={tableEntries} grouped={effectiveLibView === "grouped"} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={(id, event) => handleRowClick(id, event, effectiveLibView === "grouped" ? visibleAlbumTrackIds : undefined)} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} onToggleAlbum={toggleAlbumGroup} />
         </table>
       </div>
     )}
