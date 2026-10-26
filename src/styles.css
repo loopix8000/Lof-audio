@@ -569,7 +569,7 @@ button svg {
 }
 
 .pm-vol-box {
-  width: 92px;
+  width: 124px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2166,6 +2166,29 @@ button svg {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.deck-volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: flex-end;
+  max-width: 150px;
+}
+
+.volume-percent {
+  min-width: 30px;
+  text-align: right;
+  font-size: 11px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.volume-control:hover .volume-percent {
+  color: var(--text-primary);
 }
 
 /* ============================================================================

@@ -225,6 +225,90 @@ function DraggableSlider({
   );
 }
 
+/** Volume change per mouse-wheel notch (~100px of deltaY). */
+const VOLUME_WHEEL_STEP = 0.05;
+const WHEEL_NOTCH_PX = 100;
+
+interface VolumeControlProps {
+  volume: number;
+  muted: boolean;
+  onToggleMute: () => void;
+  onChange: (vol: number) => void;
+  className: string;
+  iconSize: number;
+  buttonStyle?: React.CSSProperties;
+  sliderStyle?: React.CSSProperties;
+}
+
+/** Mute button + slider + percent readout; the mouse wheel adjusts volume while hovering. */
+function VolumeControl({
+  volume,
+  muted,
+  onToggleMute,
+  onChange,
+  className,
+  iconSize,
+  buttonStyle,
+  sliderStyle,
+}: VolumeControlProps) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const shown = muted ? 0 : volume;
+  // Wheel events can arrive faster than re-renders, so track the latest target locally
+  const latestRef = useRef(shown);
+  latestRef.current = shown;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    let accumulated = 0;
+    const onWheel = (e: WheelEvent) => {
+      // Non-passive listener so hovering the control doesn't also scroll the page
+      e.preventDefault();
+      const px =
+        e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+      if (Math.sign(px) !== Math.sign(accumulated)) accumulated = 0;
+      accumulated += px;
+      // Trackpads send many small deltas; only step once a full notch has accumulated
+      const notches = Math.trunc(accumulated / WHEEL_NOTCH_PX);
+      if (notches === 0) return;
+      accumulated -= notches * WHEEL_NOTCH_PX;
+      const next = Math.max(0, Math.min(1, latestRef.current - notches * VOLUME_WHEEL_STEP));
+      latestRef.current = Math.round(next * 100) / 100;
+      onChangeRef.current(latestRef.current);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  const pct = Math.round(shown * 100);
+  return (
+    <div
+      ref={wrapRef}
+      className={`volume-control ${className}`}
+      title={`음량 ${pct}% · 마우스 휠로 조절`}
+    >
+      <button
+        className="flat-icon-btn"
+        style={buttonStyle}
+        onClick={onToggleMute}
+        title={muted || volume === 0 ? "음소거 해제" : "음소거"}
+      >
+        {muted || volume === 0 ? <VolumeX size={iconSize} /> : <Volume2 size={iconSize} />}
+      </button>
+      <DraggableSlider
+        value={shown}
+        max={1}
+        style={sliderStyle}
+        onChange={onChange}
+        onCommit={onChange}
+      />
+      <span className="volume-percent">{pct}%</span>
+    </div>
+  );
+}
+
 const naturalCompare = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
@@ -3265,24 +3349,14 @@ export function App() {
                 {playback.speed}x
               </button>
 
-              <button
-                className="flat-icon-btn"
-                onClick={handleToggleMute}
-                title="음소거 토글"
-              >
-                {isMuted || playback.volume === 0 ? (
-                  <VolumeX size={15} />
-                ) : (
-                  <Volume2 size={15} />
-                )}
-              </button>
-
-              <DraggableSlider
-                value={playback.volume}
-                max={1}
-                style={{ maxWidth: 84 }}
-                onChange={(val) => handleSetVolume(val)}
-                onCommit={(val) => handleSetVolume(val)}
+              <VolumeControl
+                className="deck-volume"
+                volume={playback.volume}
+                muted={isMuted}
+                onToggleMute={handleToggleMute}
+                onChange={handleSetVolume}
+                iconSize={15}
+                sliderStyle={{ maxWidth: 84 }}
               />
             </div>
           </footer>
@@ -3473,26 +3547,15 @@ export function App() {
               </div>
 
               <div className="pm-ctrl-right">
-                <div className="pm-vol-box">
-                  <button
-                    className="flat-icon-btn"
-                    style={{ width: 26, height: 26 }}
-                    onClick={handleToggleMute}
-                    title="음소거"
-                  >
-                    {isMuted || playback.volume === 0 ? (
-                      <VolumeX size={14} />
-                    ) : (
-                      <Volume2 size={14} />
-                    )}
-                  </button>
-                  <DraggableSlider
-                    value={playback.volume}
-                    max={1}
-                    onChange={(val) => handleSetVolume(val)}
-                    onCommit={(val) => handleSetVolume(val)}
-                  />
-                </div>
+                <VolumeControl
+                  className="pm-vol-box"
+                  volume={playback.volume}
+                  muted={isMuted}
+                  onToggleMute={handleToggleMute}
+                  onChange={handleSetVolume}
+                  iconSize={14}
+                  buttonStyle={{ width: 26, height: 26 }}
+                />
               </div>
             </div>
           </section>
