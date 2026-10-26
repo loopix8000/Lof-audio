@@ -142,7 +142,7 @@ export function MetadataMatchTab() {
             >
               {matchLoading
                 ? "온라인 데이터베이스에서 매칭 후보를 조회하고 있습니다..."
-                : "[자동 매칭 후보 조회]를 누르면 기존 태그를 덮어쓰기 전에 변경될 제목·아티스트·앨범·커버·가사 내역을 미리 비교하고 선택할 수 있습니다."}
+                : "곡 정보를 검색하세요."}
             </div>
           ) : (
             matchPreviews.map((p) => {
@@ -365,11 +365,11 @@ export function MetadataMatchTab() {
         </div>
       </div>
       <div className="modal-foot">
-        <span className="modal-foot-left">
-          {matchPreviews.length > 0
-            ? `선택된 적용 대상: ${confirmedMatchCount} / ${dialogTrackIds.length}곡`
-            : "사용자가 확인·선택한 항목만 반영됩니다"}
-        </span>
+        {matchPreviews.length > 0 && (
+          <span className="modal-foot-left">
+            {confirmedMatchCount} / {dialogTrackIds.length}곡 선택
+          </span>
+        )}
         <div className="modal-foot-right">
           <button
             className="ui-btn"

@@ -61,7 +61,7 @@ export function TrackContextMenu() {
           openPropertiesDialog("online");
         }}
       >
-        <span>자동 정보 매칭 (확인 후 적용)...</span>
+        <span>자동 정보 매칭...</span>
       </button>
       <button
         className="native-menu-item"

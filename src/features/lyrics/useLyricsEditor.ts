@@ -1,5 +1,8 @@
 import { api } from "../../api";
+import { useEffect } from "react";
 import { LrcLibTrack } from "../../types";
+import { lookupLyricsBatch } from "./lyricsBatch";
+import type { LyricsEntry } from "./lyricsBatch";
 import type { LyricsEditorStateModel } from "./useLyricsEditorState";
 import type { NotificationsModel } from "../../app/useNotifications";
 import type { TrackEditorModel } from "../track-editor/useTrackEditor";
@@ -25,60 +28,154 @@ export function useLyricsEditor({
   trackEditorState,
 }: Inputs) {
   const {
-    lrcSearchQuery,
+    lyricsEntries,
+    setLyricsEntries,
+    lyricsEditingTrackId,
+    lyricsSessionVersion,
+    lyricsBusy,
     setLrcLoading,
-    setLrcResults,
-    setLyricDraft,
-    lyricDraft,
+    setLyricsSaving,
   } = lyricsEditorState;
   const { notify } = notifications;
-  const { dialogPrimaryTrack } = trackEditor;
+  const { dialogTracks, refreshEditedTracks } = trackEditor;
   const { saveLrcFile } = preferences;
   const { setTracks } = libraryState;
-  const { setDialogOpen } = trackEditorState;
+  const { dialogOpen, setDialogOpen } = trackEditorState;
+  const entry = lyricsEditingTrackId === null ? undefined : lyricsEntries[lyricsEditingTrackId];
+  const lrcSearchQuery = entry?.query || "";
+  const lyricDraft = entry?.draft || "";
+  const lrcResults = entry?.results || [];
+  const lyricsDirtyCount = dialogTracks.filter(track => lyricsEntries[track.id]?.dirty).length;
+
+  useEffect(() => {
+    if (!dialogOpen) {
+      lyricsSessionVersion.current += 1;
+      lyricsBusy.current = false;
+      setLrcLoading(false);
+      setLyricsSaving(false);
+    }
+  }, [dialogOpen]);
+
+  const updateEntry = (trackId: number, changes: Partial<LyricsEntry>) => {
+    setLyricsEntries(previous => previous[trackId]
+      ? { ...previous, [trackId]: { ...previous[trackId], ...changes } }
+      : previous);
+  };
+
+  const setLrcSearchQuery = (query: string) => {
+    if (lyricsEditingTrackId !== null) updateEntry(lyricsEditingTrackId, { query });
+  };
+  const setLyricDraft = (draft: string) => {
+    if (lyricsEditingTrackId !== null && !lyricsBusy.current) {
+      updateEntry(lyricsEditingTrackId, { draft, dirty: true, status: "" });
+    }
+  };
+
   const handleSearchLrcManual = async () => {
-    if (!lrcSearchQuery.trim()) return;
+    const trackId = lyricsEditingTrackId;
+    if (trackId === null || !lrcSearchQuery.trim() || lyricsBusy.current) return;
+    const version = lyricsSessionVersion.current;
+    const isCurrent = () => version === lyricsSessionVersion.current;
+    lyricsBusy.current = true;
     setLrcLoading(true);
+    updateEntry(trackId, { status: "조회 중…" });
     try {
       const list = await api.searchLyricsManual(lrcSearchQuery.trim());
-      setLrcResults(list);
-      if (list.length === 0) notify("검색된 가사가 없습니다.");
+      if (!isCurrent()) return;
+      updateEntry(trackId, { results: list, status: list.length ? `${list.length}개 후보` : "검색 결과 없음" });
     } catch (err) {
-      notify(`가사 검색 실패: ${err}`);
+      if (isCurrent()) updateEntry(trackId, { results: [], status: `가사 검색 실패: ${err}` });
     } finally {
-      setLrcLoading(false);
+      if (isCurrent()) {
+        lyricsBusy.current = false;
+        setLrcLoading(false);
+      }
+    }
+  };
+
+  const handleSearchAllLyrics = async () => {
+    if (lyricsBusy.current || dialogTracks.length === 0) return;
+    const version = lyricsSessionVersion.current;
+    const isCurrent = () => version === lyricsSessionVersion.current;
+    lyricsBusy.current = true;
+    setLrcLoading(true);
+    try {
+      await lookupLyricsBatch(dialogTracks.map(track => track.id), {
+        isCurrent,
+        lookup: trackId => {
+          updateEntry(trackId, { status: "조회 중…" });
+          return api.previewMatchLyrics(trackId, null);
+        },
+        onResult: (trackId, lyrics) => {
+          const draft = lyrics?.syncedLyrics || lyrics?.plainLyrics;
+          updateEntry(trackId, lyrics && draft
+            ? { draft, results: [lyrics], dirty: true, status: "가사 불러옴" }
+            : { results: [], status: "검색 결과 없음" });
+        },
+        onError: (trackId, error) => updateEntry(trackId, { results: [], status: `가사 검색 실패: ${error}` }),
+      });
+    } finally {
+      if (isCurrent()) {
+        lyricsBusy.current = false;
+        setLrcLoading(false);
+      }
     }
   };
 
   const handleLoadLrcCandidateToDraft = (cand: LrcLibTrack) => {
+    if (lyricsBusy.current) return;
     const text = cand.syncedLyrics || cand.plainLyrics || "";
     setLyricDraft(text);
-    notify("가사 편집창에 미리보기가 로드되었습니다. 확인 후 [가사 저장]을 누르세요.");
+    notify("가사를 불러왔습니다.");
   };
 
   const handleSaveEditedLyrics = async () => {
-    const t = dialogPrimaryTrack;
-    if (!t) return;
+    const targets = dialogTracks.filter(track => lyricsEntries[track.id]?.dirty);
+    if (lyricsBusy.current || targets.length === 0) return;
+    const version = lyricsSessionVersion.current;
+    const isCurrent = () => version === lyricsSessionVersion.current;
+    lyricsBusy.current = true;
+    setLyricsSaving(true);
+    let saved = 0;
+    let failed = 0;
     try {
-      const hasTime = /\[\d{1,3}:\d{2}/.test(lyricDraft);
-      const updated = await api.applyLyricsToTrack(
-        t.id,
-        hasTime ? lyricDraft : null,
-        lyricDraft,
-        saveLrcFile
-      );
-      setTracks((prev) =>
-        prev.map((item) => (item.id === updated.id ? updated : item))
-      );
-      setDialogOpen(false);
-      notify("가사가 저장되었습니다.");
-    } catch (err) {
-      notify(`저장 실패: ${err}`);
+      for (const track of targets) {
+        if (!isCurrent()) return;
+        const draft = lyricsEntries[track.id].draft;
+        try {
+          const hasTime = /\[\d{1,3}:\d{2}/.test(draft);
+          const updated = await api.applyLyricsToTrack(track.id, hasTime ? draft : null, draft, saveLrcFile);
+          setTracks(previous => previous.map(item => item.id === updated.id ? updated : item));
+          if (!isCurrent()) return;
+          saved++;
+          updateEntry(track.id, { dirty: false, status: "저장됨" });
+        } catch (error) {
+          if (!isCurrent()) return;
+          failed++;
+          updateEntry(track.id, { status: `저장 실패: ${error}` });
+          await refreshEditedTracks([track.id]);
+        }
+      }
+      if (!isCurrent()) return;
+      if (failed === 0) setDialogOpen(false);
+      notify(failed ? `${saved}곡 저장, ${failed}곡 저장 실패` : `${saved}곡의 가사를 저장했습니다.`);
+    } finally {
+      if (isCurrent()) {
+        lyricsBusy.current = false;
+        setLyricsSaving(false);
+      }
     }
   };
 
   return {
+    lrcSearchQuery,
+    setLrcSearchQuery,
+    lyricDraft,
+    setLyricDraft,
+    lrcResults,
+    lyricsDirtyCount,
     handleSearchLrcManual,
+    handleSearchAllLyrics,
     handleLoadLrcCandidateToDraft,
     handleSaveEditedLyrics,
   };

@@ -72,7 +72,7 @@ export function FilenamePatternTab() {
       </div>
       <div className="modal-foot">
         <span className="modal-foot-left">
-          미리보기 확인 후 [규칙 적용]을 누르면 반영됩니다 ({dialogTrackIds.length}곡)
+          {dialogTrackIds.length}곡 선택
         </span>
         <div className="modal-foot-right">
           <button

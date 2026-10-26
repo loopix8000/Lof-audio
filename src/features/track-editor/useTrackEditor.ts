@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect } from "react";
 import { api } from "../../api";
 import { mergeTrackChanges } from "../../library";
+import { createLyricsEntries } from "../lyrics/lyricsBatch";
 import { DialogTab } from "../../app/types";
 import type { TrackEditorStateModel } from "./useTrackEditorState";
 import type { LibraryStateModel } from "../library/useLibraryState";
@@ -67,7 +68,7 @@ export function useTrackEditor({
     setMatchCheckedMap,
     setMatchSelectedCandIdx,
   } = metadataState;
-  const { setLrcSearchQuery, setLyricDraft, setLrcResults } = lyricsEditorState;
+  const { setLyricsEntries, setLyricsEditingTrackId, lyricsSessionVersion, lyricsBusy, setLrcLoading, setLyricsSaving } = lyricsEditorState;
   const dialogTrackIdSet = useMemo(() => new Set(dialogTrackIds), [dialogTrackIds]);
 
   const dialogTracks = useMemo(
@@ -128,8 +129,6 @@ export function useTrackEditor({
           ? `${t.artist} ${t.title}`
           : t.title;
       setManualMbQuery(q);
-      setLrcSearchQuery(q);
-      setLyricDraft(t.syncedLyrics || t.plainLyrics || "");
     } else {
       const artists = new Set(selTracks.map((t) => t.artist));
       const albums = new Set(selTracks.map((t) => t.album));
@@ -154,8 +153,6 @@ export function useTrackEditor({
           ? `${first.artist} ${first.title}`
           : first.title;
       setManualMbQuery(q);
-      setLrcSearchQuery(q);
-      setLyricDraft(first.syncedLyrics || first.plainLyrics || "");
     }
 
     matchDialogVersion.current += 1;
@@ -164,7 +161,12 @@ export function useTrackEditor({
     setMatchPreviews([]);
     setMatchCheckedMap({});
     setMatchSelectedCandIdx({});
-    setLrcResults([]);
+    lyricsSessionVersion.current += 1;
+    lyricsBusy.current = false;
+    setLrcLoading(false);
+    setLyricsSaving(false);
+    setLyricsEntries(createLyricsEntries(selTracks));
+    setLyricsEditingTrackId(selTracks[0].id);
     setDialogTab(initialTab);
     setDialogOpen(true);
   };

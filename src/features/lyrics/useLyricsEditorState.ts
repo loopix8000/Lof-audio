@@ -1,24 +1,25 @@
-import { useState } from "react";
-import { LrcLibTrack } from "../../types";
+import { useRef, useState } from "react";
+import type { LyricsEntry } from "./lyricsBatch";
 
 export function useLyricsEditorState() {
-  const [lrcSearchQuery, setLrcSearchQuery] = useState("");
-
+  const [lyricsEntries, setLyricsEntries] = useState<Record<number, LyricsEntry>>({});
+  const [lyricsEditingTrackId, setLyricsEditingTrackId] = useState<number | null>(null);
   const [lrcLoading, setLrcLoading] = useState(false);
-
-  const [lrcResults, setLrcResults] = useState<LrcLibTrack[]>([]);
-
-  const [lyricDraft, setLyricDraft] = useState("");
+  const [lyricsSaving, setLyricsSaving] = useState(false);
+  const lyricsSessionVersion = useRef(0);
+  const lyricsBusy = useRef(false);
 
   return {
-    setLrcSearchQuery,
-    setLyricDraft,
-    setLrcResults,
-    lrcSearchQuery,
+    lyricsEntries,
+    setLyricsEntries,
+    lyricsEditingTrackId,
+    setLyricsEditingTrackId,
+    lyricsSessionVersion,
+    lyricsBusy,
     setLrcLoading,
-    lyricDraft,
     lrcLoading,
-    lrcResults,
+    lyricsSaving,
+    setLyricsSaving,
   };
 }
 

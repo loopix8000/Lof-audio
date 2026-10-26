@@ -2850,6 +2850,11 @@ label.settings-row {
   color: #86efac;
 }
 
+.lyrics-search-status {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
 .modal-foot {
   height: 46px;
   min-height: 46px;
@@ -2875,6 +2880,7 @@ label.settings-row {
 .modal-foot-right {
   display: flex;
   align-items: center;
+  margin-left: auto;
   gap: 6px;
   flex-shrink: 0;
 }

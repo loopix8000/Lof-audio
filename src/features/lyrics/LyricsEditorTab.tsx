@@ -3,6 +3,13 @@ import { useAudioAppContext } from "../../app/AppContext";
 export function LyricsEditorTab() {
   const {
     dialogTab,
+    dialogTracks,
+    lyricsEditingTrackId,
+    setLyricsEditingTrackId,
+    lyricsEntries,
+    lyricsSaving,
+    lyricsDirtyCount,
+    handleSearchAllLyrics,
     lrcSearchQuery,
     setLrcSearchQuery,
     handleSearchLrcManual,
@@ -17,10 +24,36 @@ export function LyricsEditorTab() {
   return (dialogTab === "lyrics" && (
     <>
       <div className="modal-content">
+        {dialogTracks.length > 1 && (
+          <div style={{ display: "flex", gap: 6 }}>
+            <select
+              className="form-field"
+              aria-label="가사 편집할 곡"
+              value={lyricsEditingTrackId ?? ""}
+              onChange={event => setLyricsEditingTrackId(Number(event.target.value))}
+            >
+              {dialogTracks.map(track => (
+                <option key={track.id} value={track.id}>
+                  {track.title} · {track.artist}
+                  {lyricsEntries[track.id]?.dirty ? " · 수정됨" : ""}
+                  {lyricsEntries[track.id]?.status ? ` · ${lyricsEntries[track.id].status}` : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              className="ui-btn solid"
+              onClick={handleSearchAllLyrics}
+              disabled={lrcLoading || lyricsSaving}
+            >
+              전체 가사 검색 ({dialogTracks.length}곡)
+            </button>
+          </div>
+        )}
         <div style={{ display: "flex", gap: 6 }}>
           <input
             className="form-field"
             value={lrcSearchQuery}
+            disabled={lrcLoading || lyricsSaving}
             onChange={(e) => setLrcSearchQuery(e.target.value)}
             placeholder="가사 검색어 (아티스트 제목)..."
             onKeyDown={(e) =>
@@ -30,11 +63,17 @@ export function LyricsEditorTab() {
           <button
             className="ui-btn solid"
             onClick={handleSearchLrcManual}
-            disabled={lrcLoading}
+            disabled={lrcLoading || lyricsSaving}
           >
             {lrcLoading ? "조회 중..." : "가사 후보 검색"}
           </button>
         </div>
+
+        {lyricsEditingTrackId !== null && lyricsEntries[lyricsEditingTrackId]?.status && (
+          <div className="lyrics-search-status" role="status">
+            {lyricsEntries[lyricsEditingTrackId].status}
+          </div>
+        )}
 
         {lrcResults.length > 0 && (
           <div
@@ -93,6 +132,7 @@ export function LyricsEditorTab() {
                   className="ui-btn"
                   style={{ height: 24, padding: "0 8px" }}
                   onClick={() => handleLoadLrcCandidateToDraft(item)}
+                  disabled={lrcLoading || lyricsSaving}
                 >
                   미리보기 로드
                 </button>
@@ -103,15 +143,16 @@ export function LyricsEditorTab() {
 
         <textarea
           className="form-textarea"
-          placeholder="[00:12.34] 형식의 LRC 싱크 가사 또는 일반 가사를 입력·확인한 뒤 [가사 저장]을 누르세요..."
+          placeholder="일반 가사 또는 [00:12.34] 형식의 LRC 가사 입력..."
           value={lyricDraft}
           onChange={(e) => setLyricDraft(e.target.value)}
+          disabled={lrcLoading || lyricsSaving}
         />
       </div>
       <div className="modal-foot">
-        <span className="modal-foot-left">
-          내용 확인 후 [가사 저장]을 누르면 트랙 및 .lrc 파일에 반영됩니다
-        </span>
+        {dialogTracks.length > 1 && (
+          <span className="modal-foot-left">{lyricsDirtyCount}곡 수정됨</span>
+        )}
         <div className="modal-foot-right">
           <button
             className="ui-btn"
@@ -122,8 +163,9 @@ export function LyricsEditorTab() {
           <button
             className="ui-btn solid"
             onClick={handleSaveEditedLyrics}
+            disabled={lrcLoading || lyricsSaving || lyricsDirtyCount === 0}
           >
-            가사 저장
+            {lyricsSaving ? "저장 중…" : dialogTracks.length > 1 ? `가사 저장 (${lyricsDirtyCount}곡)` : "가사 저장"}
           </button>
         </div>
       </div>
