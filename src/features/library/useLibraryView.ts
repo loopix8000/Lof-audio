@@ -5,6 +5,7 @@ import { TableEntry } from "../../components/TrackRows";
 import { matchesTrackQuery, naturalCompare } from "./filtering";
 import type { LibraryStateModel } from "./useLibraryState";
 import { isFolderWithin } from "../workspaces/scope";
+import { buildFolderTree, getFolderLocation, isTrackInDirectory } from "./folderTree";
 
 interface Inputs {
   libraryState: LibraryStateModel;
@@ -23,7 +24,10 @@ export function useLibraryView({
     sortField,
     sortAsc,
     folderViewMode,
+    folders,
   } = libraryState;
+  const folderRoots = useMemo(() => buildFolderTree(folders, tracks), [folders, tracks]);
+  const folderLocation = useMemo(() => getFolderLocation(folderRoots, subFilter), [folderRoots, subFilter]);
   const displayedTracks = useMemo(() => {
     let list = [...tracks];
 
@@ -39,8 +43,12 @@ export function useLibraryView({
       list = list.filter((t) => t.artist === subFilter);
     } else if (navCategory === "albums" && subFilter) {
       list = list.filter((t) => t.album === subFilter);
-    } else if (navCategory === "folders" && subFilter) {
-      list = list.filter((t) => isFolderWithin(t.folderPath, subFilter));
+    } else if (navCategory === "folders") {
+      if (folderViewMode === "directory") {
+        list = list.filter(t => isTrackInDirectory(t, folderLocation.current?.path ?? null));
+      } else if (subFilter) {
+        list = list.filter(t => isFolderWithin(t.folderPath, subFilter));
+      }
     }
 
     if (searchQuery.trim()) {
@@ -94,6 +102,8 @@ export function useLibraryView({
     searchQuery,
     sortField,
     sortAsc,
+    folderViewMode,
+    folderLocation,
   ]);
 
   const totalDisplayedDuration = useMemo(
@@ -124,6 +134,10 @@ export function useLibraryView({
     const q = searchQuery.trim().toLowerCase();
     return tracks.filter(t => matchesTrackQuery(t, q));
   }, [tracks, searchQuery]);
+
+  const directoryFolders = useMemo(() => folderLocation.children.filter(folder =>
+    !searchQuery.trim() || searchFilteredTracks.some(track => isFolderWithin(track.folderPath, folder.path))
+  ), [folderLocation, searchQuery, searchFilteredTracks]);
 
   const artistCards = useMemo(() => {
     const map = new Map<
@@ -309,6 +323,8 @@ export function useLibraryView({
     searchFilteredTracks,
     albumCards,
     folderCards,
+    folderLocation,
+    directoryFolders,
     totalDisplayedDuration,
     tableEntries,
   };

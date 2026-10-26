@@ -1,4 +1,4 @@
-import { ChevronLeft, Edit3, PanelRight, Music, FolderPlus, FilePlus, Search, LayoutGrid, FolderTree } from "lucide-react";
+import { ChevronLeft, Edit3, PanelRight, Music, FolderPlus, FilePlus, Search, LayoutGrid, List } from "lucide-react";
 import { formatDuration } from "../../utils/lrc";
 import { VirtualTrackTable } from "../../components/TrackRows";
 import { TrackTableHeader } from "./TrackTableHeader";
@@ -16,6 +16,7 @@ export function LibraryBrowser() {
     searchFilteredTracks,
     albumCards,
     folderCards,
+    directoryFolders,
     folderViewMode,
     setFolderViewMode,
     displayedTracks,
@@ -45,7 +46,7 @@ export function LibraryBrowser() {
         {subFilter !== null &&
           (navCategory === "artists" ||
             navCategory === "albums" ||
-            navCategory === "folders") && (
+            (navCategory === "folders" && effectiveLibView !== "folder-directory")) && (
             <button
               className="surface-back-btn"
               onClick={() => setSubFilter(null)}
@@ -75,7 +76,7 @@ export function LibraryBrowser() {
               ? `${albumCards.length}개의 앨범 · 총 ${searchFilteredTracks.length}곡`
               : effectiveLibView === "folder-grid"
                 ? `${folderCards.length}개의 폴더 · 총 ${searchFilteredTracks.length}곡`
-                : `${displayedTracks.length}곡 · 총 ${formatDuration(totalDisplayedDuration)}${selectedIds.length > 1
+                : `${effectiveLibView === "folder-directory" ? `${directoryFolders.length}개 폴더 · ` : ""}${displayedTracks.length}곡 · 총 ${formatDuration(totalDisplayedDuration)}${selectedIds.length > 1
                   ? ` · ${selectedIds.length}곡 선택됨`
                   : ""
                 }`}
@@ -96,12 +97,12 @@ export function LibraryBrowser() {
             </button>
             <button
               className="ui-btn ghost icon-only"
-              title="디렉터리 보기"
-              aria-label="디렉터리 보기"
+              title="탐색기 보기"
+              aria-label="탐색기 보기"
               aria-pressed={folderViewMode === "directory"}
               onClick={() => setFolderViewMode("directory")}
             >
-              <FolderTree size={14} />
+              <List size={14} />
             </button>
           </div>
         )}

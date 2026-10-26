@@ -165,7 +165,7 @@ export function useLibraryState({
   useEffect(() => {
     setSelectedIds([]);
     setLastClickedId(null);
-  }, [navCategory, subFilter, activePlaylistId, activeWorkspaceId]);
+  }, [navCategory, subFilter, activePlaylistId, activeWorkspaceId, folderViewMode]);
 
   useEffect(() => {
     const close = () => setCtxMenu(null);

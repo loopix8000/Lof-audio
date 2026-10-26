@@ -14,7 +14,7 @@ function displayPath(path: string): string {
     .replace(/^\\\\\?\\/, "").replace(/\\/g, "/").replace(/\/+$/, "") || "/";
 }
 
-/** Include intermediate directories even when they contain no audio files themselves. */
+/** 음원이 없는 중간 폴더도 탐색 경로에 포함합니다. */
 export function buildFolderTree(folders: string[], tracks: Track[]): FolderNode[] {
   const roots: FolderNode[] = [];
   for (const path of [...folders].sort((a, b) => normalizeFolderPath(a).length - normalizeFolderPath(b).length)) {
@@ -48,4 +48,24 @@ export function buildFolderTree(folders: string[], tracks: Track[]): FolderNode[
   };
   sort(roots);
   return roots;
+}
+
+export function getFolderLocation(roots: FolderNode[], path: string | null) {
+  const find = (nodes: FolderNode[], ancestors: FolderNode[]): FolderNode[] | null => {
+    for (const node of nodes) {
+      if (path === null || !isFolderWithin(path, node.path)) continue;
+      const chain = [...ancestors, node];
+      if (normalizeFolderPath(path) === normalizeFolderPath(node.path)) return chain;
+      const found = find(node.children, chain);
+      if (found) return found;
+    }
+    return null;
+  };
+  const ancestors = find(roots, []) ?? [];
+  const current = ancestors[ancestors.length - 1] ?? null;
+  return { current, ancestors, children: current?.children ?? roots, parent: ancestors[ancestors.length - 2]?.path ?? null };
+}
+
+export function isTrackInDirectory(track: Track, path: string | null): boolean {
+  return path !== null && normalizeFolderPath(track.folderPath) === normalizeFolderPath(path);
 }

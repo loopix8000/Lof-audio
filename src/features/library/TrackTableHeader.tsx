@@ -1,6 +1,6 @@
 import { useAudioAppContext } from "../../app/AppContext";
 
-export function TrackTableHeader() {
+export function TrackTableHeader({ titleLabel = "제목" }: { titleLabel?: string }) {
   const {
     colWidths,
     toggleSort,
@@ -37,7 +37,7 @@ export function TrackTableHeader() {
         onClick={() => toggleSort("title")}
       >
         <span className="th-label">
-          제목{" "}
+          {titleLabel}{" "}
           {sortField === "title" && (sortAsc ? "↑" : "↓")}
         </span>
         <div
