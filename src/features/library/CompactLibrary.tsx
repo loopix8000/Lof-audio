@@ -1,9 +1,8 @@
-import { Music, Heart, Disc, Mic2, Folder, ListMusic, ChevronDown, Search, FolderPlus, Plus, Trash2, CheckSquare, Edit3, ArrowUpDown } from "lucide-react";
+import { Music, Heart, Disc, Mic2, Folder, ListMusic, ChevronDown, Search, FolderPlus, Plus, Trash2, CheckSquare, ArrowUpDown } from "lucide-react";
 import { VirtualTrackList } from "../../components/TrackRows";
 import { formatDuration } from "../../utils/lrc";
 import { CollectionBrowser } from "./CollectionBrowser";
 import { useAudioAppContext } from "../../app/AppContext";
-import { WorkspaceBar } from "../workspaces/WorkspaceBar";
 
 export function CompactLibrary() {
   const {
@@ -30,7 +29,6 @@ export function CompactLibrary() {
     handleDeleteSelected,
     selectedIds,
     totalDisplayedDuration,
-    openPropertiesDialog,
     cycleStackSort,
     setShowPlayerSearch,
   } = useAudioAppContext();
@@ -114,8 +112,6 @@ export function CompactLibrary() {
       <VirtualTrackList tracks={displayedTracks} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={handleRowClick} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} />
     )}
 
-    {showPlayerBrowser && <WorkspaceBar />}
-
     <div className="pm-pl-footer">
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
         <button
@@ -167,14 +163,6 @@ export function CompactLibrary() {
       </span>
 
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <button
-          className="flat-icon-btn"
-          style={{ width: 28, height: 28 }}
-          onClick={() => openPropertiesDialog("tags")}
-          title="속성·태그 편집"
-        >
-          <Edit3 size={13} />
-        </button>
         <button
           className="flat-icon-btn"
           style={{ width: 28, height: 28 }}

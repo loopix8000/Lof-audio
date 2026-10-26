@@ -90,8 +90,11 @@ export function LibraryBrowser() {
               className="ui-btn ghost icon-only"
               title="그리드 보기"
               aria-label="그리드 보기"
-              aria-pressed={folderViewMode === "grid"}
-              onClick={() => setFolderViewMode("grid")}
+              aria-pressed={effectiveLibView === "folder-grid"}
+              onClick={() => {
+                setFolderViewMode("grid");
+                setSubFilter(null);
+              }}
             >
               <LayoutGrid size={14} />
             </button>

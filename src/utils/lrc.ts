@@ -32,7 +32,7 @@ export function parseLrc(lrcText: string | null | undefined, offsetMs = 0): Lyri
       const timeSecs = Math.max(0, mins * 60 + secs + frac + offsetSecs);
       lines.push({
         timeSecs,
-        text: text || "♪",
+        text,
       });
     }
   }

@@ -209,9 +209,11 @@ export function LibrarySidebar() {
         ))}
       </div>
 
-      {/* Registered Folders */}
+      </div>
+      <div className="sidebar-footer">
+      {/* 워크스페이스 선택 영역 위에 연결된 폴더를 표시합니다. */}
       {folders.length > 0 && (
-        <div className="sidebar-section">
+        <div className="sidebar-section sidebar-workspace-folders">
           <div className="sidebar-heading">
             <span title={activeWorkspace?.name}>워크스페이스 폴더</span>
             {scanProgress && (
@@ -271,8 +273,6 @@ export function LibrarySidebar() {
         </div>
       )}
 
-      </div>
-      <div className="sidebar-footer">
         <WorkspaceBar />
         <div className="sidebar-file-actions">
           <button className="ui-btn" onClick={handleAddFolder}>

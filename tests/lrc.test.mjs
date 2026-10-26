@@ -20,6 +20,17 @@ test("embedded offsets advance lyrics and user adjustments delay them", () => {
   assert.equal(parseLrc("[offset:100]\n[offset:500]\n[00:10.00]hello", 500)[0].timeSecs, 10);
 });
 
+test("빈 가사 줄은 음표로 대체하지 않고 시간과 순서를 유지한다", () => {
+  const lines = parseLrc("[00:01]첫 줄\n[00:02][00:03]  \n[00:04]♪");
+  assert.deepEqual(lines, [
+    { timeSecs: 1, text: "첫 줄" },
+    { timeSecs: 2, text: "" },
+    { timeSecs: 3, text: "" },
+    { timeSecs: 4, text: "♪" },
+  ]);
+  assert.equal(findActiveLyricIndex(lines, 2), 1);
+});
+
 test("multiple timestamps preserve text, ordering, and subsecond precision", () => {
   assert.deepEqual(parseLrc("[00:20.123][00:01.5]chorus"), [
     { timeSecs: 1.5, text: "chorus" }, { timeSecs: 20.123, text: "chorus" },
