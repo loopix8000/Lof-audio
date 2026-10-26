@@ -72,7 +72,7 @@ fn edit_track(
     save_lrc: bool,
     edit: impl FnOnce(&mut Track),
 ) -> Result<Track, String> {
-    metadata::edit_track(&state.db, &state.metadata_lock, id, save_lrc, edit)
+    metadata::edit_track(&state.db, &state.metadata_lock, Some(&state.audio), id, save_lrc, edit)
 }
 
 fn build_snapshot(state: &AppState) -> Result<LibrarySnapshot, String> {

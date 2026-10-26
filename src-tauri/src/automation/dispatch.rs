@@ -122,6 +122,7 @@ fn track_update(state: &AppState, args: &Value) -> Result<Value, String> {
     metadata::edit_track_checked(
         &state.db,
         &state.metadata_lock,
+        Some(&state.audio),
         id,
         args["expectedRevision"].as_str(),
         args["saveLrcFile"]

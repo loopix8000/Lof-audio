@@ -1,8 +1,9 @@
-use crate::models::PlaybackState;
+use crate::models::{PlaybackState, Track};
 use rodio::{OutputStream, Sink, Source};
 use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -29,6 +30,56 @@ fn codecs() -> &'static CodecRegistry {
 
 const MAX_DECODE_RETRIES: usize = 1024;
 
+struct ReleasingFile {
+    file: Option<File>,
+    released: Sender<()>,
+}
+
+impl Read for ReleasingFile {
+    fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+        self.file.as_mut().unwrap().read(bytes)
+    }
+}
+
+impl Seek for ReleasingFile {
+    fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+        self.file.as_mut().unwrap().seek(position)
+    }
+}
+
+impl MediaSource for ReleasingFile {
+    fn is_seekable(&self) -> bool {
+        true
+    }
+    fn byte_len(&self) -> Option<u64> {
+        self.file.as_ref()?.metadata().ok().map(|meta| meta.len())
+    }
+}
+
+impl Drop for ReleasingFile {
+    fn drop(&mut self) {
+        // 디코더의 파일 핸들을 실제로 닫은 뒤 완료를 알린다.
+        drop(self.file.take());
+        let _ = self.released.send(());
+    }
+}
+
+fn release_playback_file(
+    sink: &mut Option<Sink>,
+    released: &mut Option<Receiver<()>>,
+) -> Result<(), String> {
+    if let Some(old) = sink.take() {
+        old.stop();
+    }
+    if let Some(receiver) = released.as_ref() {
+        receiver.recv_timeout(Duration::from_secs(2)).map_err(|_| {
+            "재생 파일 해제를 확인하지 못했습니다. 잠시 후 다시 시도하세요.".to_string()
+        })?;
+    }
+    *released = None;
+    Ok(())
+}
+
 pub struct ResilientSymphoniaSource {
     decoder: Box<dyn Decoder>,
     current_frame_offset: usize,
@@ -43,8 +94,24 @@ pub struct ResilientSymphoniaSource {
 
 impl ResilientSymphoniaSource {
     pub fn new(file: File, file_path: &str) -> Result<Self, String> {
-        let mss =
-            MediaSourceStream::new(Box::new(file) as Box<dyn MediaSource>, Default::default());
+        Self::from_media_source(Box::new(file), file_path)
+    }
+
+    fn for_playback(file_path: &str) -> Result<(Self, Receiver<()>), String> {
+        let file = File::open(file_path).map_err(|e| format!("파일을 열 수 없습니다: {}", e))?;
+        let (released, receiver) = mpsc::channel();
+        let source = Self::from_media_source(
+            Box::new(ReleasingFile {
+                file: Some(file),
+                released,
+            }),
+            file_path,
+        )?;
+        Ok((source, receiver))
+    }
+
+    fn from_media_source(file: Box<dyn MediaSource>, file_path: &str) -> Result<Self, String> {
+        let mss = MediaSourceStream::new(file, Default::default());
 
         let mut hint = Hint::new();
         if let Some(ext) = Path::new(file_path).extension().and_then(|e| e.to_str()) {
@@ -260,7 +327,12 @@ pub enum AudioCommand {
         reply: Sender<PlaybackState>,
     },
     Stop {
-        reply: Sender<PlaybackState>,
+        reply: Sender<Result<PlaybackState, String>>,
+    },
+    WriteTags {
+        track: Box<Track>,
+        save_lrc_file: bool,
+        reply: Sender<Result<(), String>>,
     },
     Seek {
         position_secs: f64,
@@ -352,6 +424,7 @@ impl AudioEngine {
             };
 
             let mut sink: Option<Sink> = stream_handle.as_ref().and_then(|h| Sink::try_new(h).ok());
+            let mut source_released = None;
 
             let mut state = InternalState {
                 current_track_id: None,
@@ -393,21 +466,14 @@ impl AudioEngine {
                                 }
                             }
                         }
-                        let file = match File::open(&file_path) {
-                            Ok(f) => f,
-                            Err(e) => {
-                                let _ = reply.send(Err(format!("파일을 열 수 없습니다: {}", e)));
-                                continue;
-                            }
-                        };
-
-                        let source = match ResilientSymphoniaSource::new(file, &file_path) {
-                            Ok(d) => d,
-                            Err(e) => {
-                                let _ = reply.send(Err(e));
-                                continue;
-                            }
-                        };
+                        let (source, released) =
+                            match ResilientSymphoniaSource::for_playback(&file_path) {
+                                Ok(d) => d,
+                                Err(e) => {
+                                    let _ = reply.send(Err(e));
+                                    continue;
+                                }
+                            };
 
                         let detected_dur = source
                             .total_duration()
@@ -431,6 +497,7 @@ impl AudioEngine {
                                     }
                                     new_sink.play();
                                     sink = Some(new_sink);
+                                    source_released = Some(released);
 
                                     state.current_track_id = Some(track_id);
                                     state.file_path = Some(file_path);
@@ -475,8 +542,12 @@ impl AudioEngine {
                         let _ = reply.send(state.snapshot(empty));
                     }
                     AudioCommand::Stop { reply } => {
-                        if let Some(ref s) = sink {
-                            s.stop();
+                        if let Err(error) = release_playback_file(&mut sink, &mut source_released) {
+                            state.accumulated_secs = state.current_position();
+                            state.is_playing = false;
+                            state.started_at = None;
+                            let _ = reply.send(Err(error));
+                            continue;
                         }
                         state.is_playing = false;
                         state.accumulated_secs = 0.0;
@@ -486,7 +557,69 @@ impl AudioEngine {
                         state.current_track_id = None;
                         state.file_path = None;
                         state.duration_secs = 0.0;
-                        let _ = reply.send(state.snapshot(true));
+                        let _ = reply.send(Ok(state.snapshot(true)));
+                    }
+                    AudioCommand::WriteTags {
+                        track,
+                        save_lrc_file,
+                        reply,
+                    } => {
+                        let active = state.file_path.as_deref() == Some(track.file_path.as_str())
+                            && source_released.is_some();
+                        if !active {
+                            let _ = reply.send(crate::tags::write_track(&track, save_lrc_file));
+                            continue;
+                        }
+                        let playing = state.is_playing;
+                        let position = state.current_position();
+                        state.accumulated_secs = position;
+                        state.started_at = None;
+                        state.is_playing = false;
+                        if let Err(error) = release_playback_file(&mut sink, &mut source_released) {
+                            let _ = reply.send(Err(error));
+                            continue;
+                        }
+                        let saved = crate::tags::write_track(&track, save_lrc_file);
+                        // 저장 실패 때도 기존 음원을 같은 위치와 상태로 다시 연결한다.
+                        let restored = (|| -> Result<(), String> {
+                            let (mut source, mut released) =
+                                ResilientSymphoniaSource::for_playback(&track.file_path)?;
+                            let target = Duration::from_secs_f64(position);
+                            let source: Box<dyn Source<Item = f32> + Send> =
+                                if source.try_seek(target).is_ok() {
+                                    Box::new(source)
+                                } else {
+                                    drop(source);
+                                    let (source, fallback_released) =
+                                        ResilientSymphoniaSource::for_playback(&track.file_path)?;
+                                    released = fallback_released;
+                                    // 탐색을 지원하지 않는 코덱은 처음부터 해당 위치까지 건너뛴다.
+                                    Box::new(source.skip_duration(target))
+                                };
+                            let handle = stream_handle
+                                .as_ref()
+                                .ok_or("오디오 출력 장치가 없습니다.")?;
+                            let new_sink = Sink::try_new(handle)
+                                .map_err(|e| format!("재생 복원 실패: {}", e))?;
+                            new_sink.pause();
+                            new_sink.set_volume(state.volume);
+                            new_sink.set_speed(state.speed);
+                            new_sink.append(source);
+                            if playing {
+                                new_sink.play();
+                            }
+                            sink = Some(new_sink);
+                            source_released = Some(released);
+                            state.is_playing = playing;
+                            state.started_at = playing.then(Instant::now);
+                            Ok(())
+                        })();
+                        // 태그가 저장된 경우 DB 갱신은 계속하고 재생 복원 오류를 별도로 알린다.
+                        if let Err(error) = restored {
+                            state.has_active_track = false;
+                            eprintln!("태그 저장 후 재생 복원 실패: {}", error);
+                        }
+                        let _ = reply.send(saved);
                     }
                     AudioCommand::Seek {
                         position_secs,
@@ -509,21 +642,20 @@ impl AudioEngine {
                             if seek_res.is_err() {
                                 let mut restored = false;
                                 if let Some(ref path) = state.file_path {
-                                    if let Ok(file) = File::open(path) {
-                                        if let Ok(source) =
-                                            ResilientSymphoniaSource::new(file, path)
-                                        {
-                                            if let Some(ref handle) = stream_handle {
-                                                if let Ok(new_sink) = Sink::try_new(handle) {
-                                                    new_sink.set_volume(state.volume);
-                                                    new_sink.set_speed(state.speed);
-                                                    new_sink.append(source.skip_duration(seek_to));
-                                                    if !state.is_playing {
-                                                        new_sink.pause();
-                                                    }
-                                                    sink = Some(new_sink);
-                                                    restored = true;
+                                    if let Ok((source, released)) =
+                                        ResilientSymphoniaSource::for_playback(path)
+                                    {
+                                        if let Some(ref handle) = stream_handle {
+                                            if let Ok(new_sink) = Sink::try_new(handle) {
+                                                new_sink.set_volume(state.volume);
+                                                new_sink.set_speed(state.speed);
+                                                new_sink.append(source.skip_duration(seek_to));
+                                                if !state.is_playing {
+                                                    new_sink.pause();
                                                 }
+                                                sink = Some(new_sink);
+                                                source_released = Some(released);
+                                                restored = true;
                                             }
                                         }
                                     }
@@ -582,11 +714,141 @@ impl AudioEngine {
         let guard = self.tx.lock().map_err(|e| e.to_string())?;
         guard.send(cmd).map_err(|e| e.to_string())
     }
+
+    pub fn write_tags(&self, track: &Track, save_lrc_file: bool) -> Result<(), String> {
+        let (reply, receiver) = mpsc::channel();
+        self.send_cmd(AudioCommand::WriteTags {
+            track: Box::new(track.clone()),
+            save_lrc_file,
+            reply,
+        })?;
+        receiver
+            .recv()
+            .map_err(|_| "태그 저장 작업의 응답이 중단되었습니다.".to_string())?
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decoder_release_notification_arrives_after_file_is_closed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tone.wav");
+        std::fs::copy(fixture("tone.wav"), &path).unwrap();
+        let (source, released) =
+            ResilientSymphoniaSource::for_playback(path.to_str().unwrap()).unwrap();
+        let (sink, output) = Sink::new_idle();
+        sink.pause();
+        sink.append(source);
+        let worker = thread::spawn(move || for _ in output.take(20000) {});
+        release_playback_file(&mut Some(sink), &mut Some(released)).unwrap();
+        let mut track = crate::tags::read_track_from_path(&path).unwrap();
+        track.title = "핸들 해제 후 저장".into();
+        crate::tags::write_track(&track, false).unwrap();
+        worker.join().unwrap();
+        assert_eq!(
+            crate::tags::read_track_from_path(&path).unwrap().title,
+            track.title
+        );
+    }
+
+    #[test]
+    #[ignore = "실제 오디오 출력 장치가 있는 로컬 환경에서 실행"]
+    fn tag_save_restores_playing_and_paused_state_and_position() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("silence.wav");
+        let data_len = 48000u32 * 2 * 2 * 4;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&48000u32.to_le_bytes());
+        bytes.extend_from_slice(&192000u32.to_le_bytes());
+        bytes.extend_from_slice(&4u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_len.to_le_bytes());
+        bytes.resize(44 + data_len as usize, 0);
+        std::fs::write(&path, bytes).unwrap();
+        let audio = AudioEngine::new();
+        let (reply, rx) = mpsc::channel();
+        audio
+            .send_cmd(AudioCommand::SetVolume { volume: 0.0, reply })
+            .unwrap();
+        rx.recv().unwrap();
+        let (reply, rx) = mpsc::channel();
+        audio
+            .send_cmd(AudioCommand::Play {
+                track_id: 1,
+                file_path: path.to_string_lossy().into_owned(),
+                duration_secs: 4.0,
+                reply,
+            })
+            .unwrap();
+        rx.recv().unwrap().unwrap();
+        let (reply, rx) = mpsc::channel();
+        audio
+            .send_cmd(AudioCommand::Seek {
+                position_secs: 0.7,
+                reply,
+            })
+            .unwrap();
+        rx.recv().unwrap().unwrap();
+        let (reply, rx) = mpsc::channel();
+        audio
+            .send_cmd(AudioCommand::SetSpeed { speed: 1.25, reply })
+            .unwrap();
+        rx.recv().unwrap();
+        let (reply, rx) = mpsc::channel();
+        audio.send_cmd(AudioCommand::Pause { reply }).unwrap();
+        let paused = rx.recv().unwrap();
+        let mut track = crate::tags::read_track_from_path(&path).unwrap();
+        for playing in [false, true] {
+            if playing {
+                let (reply, rx) = mpsc::channel();
+                audio.send_cmd(AudioCommand::Resume { reply }).unwrap();
+                rx.recv().unwrap();
+            }
+            track.title = format!("재생 상태 {}에서 저장", playing);
+            #[cfg(windows)]
+            {
+                use std::os::windows::fs::OpenOptionsExt;
+                let before = std::fs::read(&path).unwrap();
+                let held = std::fs::OpenOptions::new()
+                    .read(true)
+                    .share_mode(1)
+                    .open(&path)
+                    .unwrap();
+                assert!(audio.write_tags(&track, false).is_err());
+                assert_eq!(std::fs::read(&path).unwrap(), before);
+                let (reply, rx) = mpsc::channel();
+                audio.send_cmd(AudioCommand::GetState { reply }).unwrap();
+                assert_eq!(rx.recv().unwrap().is_playing, playing);
+                drop(held);
+            }
+            audio.write_tags(&track, false).unwrap();
+            let (reply, rx) = mpsc::channel();
+            audio.send_cmd(AudioCommand::GetState { reply }).unwrap();
+            let after = rx.recv().unwrap();
+            assert_eq!(after.is_playing, playing);
+            assert!((after.position_secs - paused.position_secs).abs() < 0.2);
+            assert_eq!(after.volume, 0.0);
+            assert_eq!(after.speed, 1.25);
+            assert_eq!(
+                crate::tags::read_track_from_path(&path).unwrap().title,
+                track.title
+            );
+        }
+        let (reply, rx) = mpsc::channel();
+        audio.send_cmd(AudioCommand::Stop { reply }).unwrap();
+        assert_eq!(rx.recv().unwrap().unwrap().current_track_id, None);
+        crate::tags::write_track(&track, false).unwrap();
+    }
     fn fixture(name: &str) -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures")

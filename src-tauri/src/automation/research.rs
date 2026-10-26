@@ -312,6 +312,7 @@ pub(super) fn apply(state: &AppState, args: &Value) -> Result<Value, String> {
     let result = metadata::edit_track_checked_with_revision(
         &state.db,
         &state.metadata_lock,
+        Some(&state.audio),
         proposal.track_id,
         Some(&proposal.expected_revision),
         false,

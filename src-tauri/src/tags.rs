@@ -4,11 +4,13 @@ use base64::Engine;
 use lofty::config::WriteOptions;
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::picture::{MimeType, Picture, PictureType};
-use lofty::prelude::{Accessor, ItemKey};
+use lofty::prelude::{Accessor, ItemKey, TagExt};
 use lofty::probe::Probe;
 use lofty::tag::Tag;
 use std::collections::HashMap;
 use std::fs;
+use std::io::Seek;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 
 pub fn read_track_from_path(path: &Path) -> Option<Track> {
@@ -147,8 +149,29 @@ pub fn read_track_from_path(path: &Path) -> Option<Track> {
     })
 }
 
-/// Writes a complete metadata snapshot; absent optional fields remove old tags.
+/// 외부 태그 라이브러리의 패닉이 메타데이터 잠금까지 오염시키지 않게 한다.
 pub fn write_track(track: &Track, save_lrc_file: bool) -> Result<(), String> {
+    guard_tag_write(&track.file_name, || write_track_inner(track, save_lrc_file))
+}
+
+fn guard_tag_write(
+    file_name: &str,
+    write: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    catch_unwind(AssertUnwindSafe(write)).unwrap_or_else(|panic| {
+        let message = panic
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| panic.downcast_ref::<&str>().copied())
+            .unwrap_or("알 수 없는 내부 오류");
+        Err(format!(
+            "태그 처리 중 내부 오류 ({}): {}",
+            file_name, message
+        ))
+    })
+}
+
+fn write_track_inner(track: &Track, save_lrc_file: bool) -> Result<(), String> {
     let path = Path::new(&track.file_path);
     let probed =
         Probe::open(path).map_err(|e| format!("파일 열기 실패 ({}): {}", track.file_name, e))?;
@@ -209,11 +232,17 @@ pub fn write_track(track: &Track, save_lrc_file: bool) -> Result<(), String> {
             bytes,
         ));
     }
-    tagged_file
-        .save_to_path(path, WriteOptions::default())
-        .map_err(|e| format!("태그 저장 실패 ({}): {}", track.file_name, e))?;
-    // Keep an existing sidecar consistent even when creating new sidecars is disabled.
     let lrc_path = path.with_extension("lrc");
+    if (save_lrc_file || lrc_path.exists()) && lrc_path.is_dir() {
+        return Err("LRC 경로가 디렉터리여서 저장할 수 없습니다.".into());
+    }
+    // 기존 ID3v1 등 보조 태그는 원시 바이트 그대로 두고 기본 태그만 저장한다.
+    // 재생 파일의 해제는 오디오 스레드에서 확인하고 완성된 파일만 교체한다.
+    replace_audio_file(path, |file| {
+        tag.save_to(file, WriteOptions::default())
+            .map_err(|e| format!("태그 저장 실패 ({}): {}", track.file_name, e))
+    })?;
+    // 새 사이드카 생성을 꺼도 기존 파일은 현재 가사와 일치시킨다.
     if save_lrc_file || lrc_path.exists() {
         if let Some(lrc) = track
             .synced_lyrics
@@ -229,6 +258,44 @@ pub fn write_track(track: &Track, save_lrc_file: bool) -> Result<(), String> {
             }
         }
     }
+    Ok(())
+}
+
+fn replace_audio_file(
+    path: &Path,
+    write: impl FnOnce(&mut fs::File) -> Result<(), String>,
+) -> Result<(), String> {
+    // 심볼릭 링크가 있으면 링크 자체 대신 실제 음원 파일을 교체한다.
+    let target = fs::canonicalize(path).map_err(|e| format!("음원 경로 확인 실패: {}", e))?;
+    let permissions = fs::metadata(&target)
+        .map_err(|e| format!("음원 속성 확인 실패: {}", e))?
+        .permissions();
+    if permissions.readonly() {
+        return Err("읽기 전용 음원에는 태그를 저장할 수 없습니다.".into());
+    }
+    let mut staged =
+        tempfile::NamedTempFile::new_in(target.parent().ok_or("음원의 상위 폴더가 없습니다.")?)
+            .map_err(|e| format!("태그 임시 파일 생성 실패: {}", e))?;
+    let mut original = fs::File::open(&target).map_err(|e| format!("음원 읽기 실패: {}", e))?;
+    std::io::copy(&mut original, staged.as_file_mut())
+        .map_err(|e| format!("음원 복사 실패: {}", e))?;
+    drop(original);
+    staged
+        .as_file_mut()
+        .rewind()
+        .map_err(|e| format!("태그 파일 탐색 실패: {}", e))?;
+    write(staged.as_file_mut())?;
+    staged
+        .as_file()
+        .set_permissions(permissions)
+        .map_err(|e| format!("음원 속성 저장 실패: {}", e))?;
+    staged
+        .as_file()
+        .sync_all()
+        .map_err(|e| format!("태그 파일 동기화 실패: {}", e))?;
+    staged
+        .persist(&target)
+        .map_err(|e| format!("음원 교체 실패: {}", e.error))?;
     Ok(())
 }
 
@@ -365,6 +432,96 @@ pub fn parse_filename_with_pattern(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn multibyte_id3v1_is_preserved_without_reserializing_it() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tone.mp3");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tone.mp3"),
+            &path,
+        )
+        .unwrap();
+        let mut legacy = [0; 128];
+        legacy[..3].copy_from_slice(b"TAG");
+        // Latin-1로 읽으면 UTF-8 30바이트 경계가 문자 중간에 걸리는 제목이다.
+        legacy[3] = b'a';
+        legacy[4..33].fill(0xa4);
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(&legacy)
+            .unwrap();
+        let mut track = read_track_from_path(&path).unwrap();
+        track.title = "한국어 제목은 길어도 온전히 보존합니다".into();
+        track.artist = "hat_shop".into();
+        write_track(&track, false).unwrap();
+        let reread = read_track_from_path(&path).unwrap();
+        assert_eq!(reread.title, track.title);
+        assert_eq!(reread.artist, track.artist);
+        assert!(fs::read(&path).unwrap().ends_with(&legacy));
+    }
+
+    #[test]
+    fn failed_or_panicking_serialization_keeps_original_and_lock_usable() {
+        use std::io::Write;
+        let (_dir, path) = audio_copy();
+        let original = fs::read(&path).unwrap();
+        let lock = std::sync::Mutex::new(());
+        for panic in [false, true] {
+            let _guard = lock.lock().unwrap();
+            let result = guard_tag_write("tone.wav", || {
+                replace_audio_file(&path, |file| {
+                    file.write_all("저장 실패를 재현하는 임시 내용".as_bytes())
+                        .unwrap();
+                    if panic {
+                        panic!("태그 직렬화 패닉 재현");
+                    }
+                    Err("태그 직렬화 실패 재현".into())
+                })
+            });
+            assert!(result.is_err());
+            assert_eq!(fs::read(&path).unwrap(), original);
+            assert!(!lock.is_poisoned());
+        }
+        let mut track = read_track_from_path(&path).unwrap();
+        track.title = "오류 이후 정상 저장".into();
+        write_track(&track, false).unwrap();
+        assert_eq!(read_track_from_path(&path).unwrap().title, track.title);
+    }
+
+    #[test]
+    fn atomic_tag_writes_preserve_supported_audio_formats() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in [
+            "tone.mp3",
+            "tone.wav",
+            "tone.flac",
+            "tone.ogg",
+            "tone.opus",
+            "tone.m4a",
+        ] {
+            let path = dir.path().join(name);
+            fs::copy(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures")
+                    .join(name),
+                &path,
+            )
+            .unwrap();
+            let mut track = read_track_from_path(&path).unwrap();
+            let duration = track.duration_secs;
+            track.title = "형식별 저장 확인".into();
+            track.artist = "아티스트".into();
+            write_track(&track, false).unwrap_or_else(|e| panic!("{}: {}", name, e));
+            let reread = read_track_from_path(&path).unwrap();
+            assert_eq!(reread.title, track.title, "{}", name);
+            assert_eq!(reread.artist, track.artist, "{}", name);
+            assert!((reread.duration_secs - duration).abs() < 0.01, "{}", name);
+        }
+    }
 
     fn audio_copy() -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempfile::tempdir().unwrap();

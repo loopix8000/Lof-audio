@@ -237,15 +237,23 @@ mod tests {
     #[test]
     fn installs_current_bundle_and_preserves_customized_installations_in_backups() {
         for (path, content) in bundle() {
-            assert_eq!(
-                fs::read(
-                    Path::new(env!("CARGO_MANIFEST_DIR"))
-                        .join("../skills/lof-audio")
-                        .join(path)
-                )
-                .unwrap(),
-                content
-            );
+            let saved = fs::read(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../skills/lof-audio")
+                    .join(&path),
+            )
+            .unwrap();
+            if path == "references/tools.json" {
+                // Git의 줄바꿈 변환과 관계없이 실제 도구 정의를 비교한다.
+                assert_eq!(
+                    serde_json::from_slice::<Value>(&saved).unwrap(),
+                    serde_json::from_slice::<Value>(&content).unwrap(),
+                    "{}",
+                    path
+                );
+            } else {
+                assert_eq!(saved, content, "{}", path);
+            }
         }
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("skills");

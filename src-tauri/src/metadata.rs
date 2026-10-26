@@ -19,11 +19,12 @@ pub fn revision(track: &Track) -> String {
 pub fn edit_track(
     db: &Database,
     lock: &Mutex<()>,
+    audio: Option<&crate::audio::AudioEngine>,
     id: i64,
     save_lrc: bool,
     edit: impl FnOnce(&mut Track),
 ) -> Result<Track, String> {
-    edit_track_checked(db, lock, id, None, save_lrc, |track| {
+    edit_track_checked(db, lock, audio, id, None, save_lrc, |track| {
         edit(track);
         Ok(())
     })
@@ -32,38 +33,50 @@ pub fn edit_track(
 pub fn edit_track_checked(
     db: &Database,
     lock: &Mutex<()>,
+    audio: Option<&crate::audio::AudioEngine>,
     id: i64,
     expected_revision: Option<&str>,
     save_lrc: bool,
     edit: impl FnOnce(&mut Track) -> Result<(), String>,
 ) -> Result<Track, String> {
-    edit_checked((db, lock), id, expected_revision, save_lrc, edit, |_| {
-        db.get_public_track(id)
-    })
+    edit_checked(
+        (db, lock, audio),
+        id,
+        expected_revision,
+        save_lrc,
+        edit,
+        |_| db.get_public_track(id),
+    )
 }
 
 pub fn edit_track_checked_with_revision(
     db: &Database,
     lock: &Mutex<()>,
+    audio: Option<&crate::audio::AudioEngine>,
     id: i64,
     expected_revision: Option<&str>,
     save_lrc: bool,
     edit: impl FnOnce(&mut Track) -> Result<(), String>,
 ) -> Result<(Track, String), String> {
-    edit_checked((db, lock), id, expected_revision, save_lrc, edit, |track| {
-        Ok((db.get_public_track(id)?, revision(track)))
-    })
+    edit_checked(
+        (db, lock, audio),
+        id,
+        expected_revision,
+        save_lrc,
+        edit,
+        |track| Ok((db.get_public_track(id)?, revision(track))),
+    )
 }
 
 fn edit_checked<T>(
-    store: (&Database, &Mutex<()>),
+    store: (&Database, &Mutex<()>, Option<&crate::audio::AudioEngine>),
     id: i64,
     expected_revision: Option<&str>,
     save_lrc: bool,
     edit: impl FnOnce(&mut Track) -> Result<(), String>,
     after: impl FnOnce(&Track) -> Result<T, String>,
 ) -> Result<T, String> {
-    let (db, lock) = store;
+    let (db, lock, audio) = store;
     let _guard = lock.lock().map_err(|e| e.to_string())?;
     let mut track = db
         .get_track_by_id(id)?
@@ -72,7 +85,11 @@ fn edit_checked<T>(
         return Err("CONFLICT: 트랙이 변경되었습니다. 다시 읽고 요청한 변경만 적용하세요.".into());
     }
     edit(&mut track)?;
-    tags::write_track(&track, save_lrc)?;
+    if let Some(audio) = audio {
+        audio.write_tags(&track, save_lrc)?;
+    } else {
+        tags::write_track(&track, save_lrc)?;
+    }
     db.update_track_metadata(&track)?;
     after(&track)
 }
@@ -98,7 +115,7 @@ mod tests {
         let mut readonly = permissions.clone();
         readonly.set_readonly(true);
         fs::set_permissions(&path, readonly).unwrap();
-        let result = edit_track(&db, &Mutex::new(()), id, false, |t| {
+        let result = edit_track(&db, &Mutex::new(()), None, id, false, |t| {
             t.title = "new title".into()
         });
         fs::set_permissions(&path, permissions).unwrap();
@@ -124,7 +141,7 @@ mod tests {
             .unwrap();
         let stale_lookup = db.get_track_by_id(id).unwrap().unwrap();
         db.set_lyric_offset(id, 500).unwrap();
-        let current = edit_track(&db, &Mutex::new(()), id, false, |t| {
+        let current = edit_track(&db, &Mutex::new(()), None, id, false, |t| {
             t.title = "downloaded title".into()
         })
         .unwrap();

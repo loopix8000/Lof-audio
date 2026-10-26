@@ -74,6 +74,49 @@ fn fixture(root: &Path) -> (Arc<AppState>, i64) {
     )
 }
 
+#[cfg(windows)]
+#[test]
+fn sharing_error_keeps_file_database_and_rpc_available_for_retry() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let (state, id) = fixture(dir.path());
+    let copy = Arc::clone(&state);
+    let handler: Handler = Arc::new(move |name, args| {
+        let state = Arc::clone(&copy);
+        Box::pin(async move { dispatch::call(&state, &name, &args).await })
+    });
+    let server = ApiServer::start(&dir.path().join("runtime.json"), handler).unwrap();
+    let path = dir.path().join("tone.wav");
+    let before = fs::read(&path).unwrap();
+    let (_, read) = rpc(&server, "track_read", json!({"workspaceId":1,"trackId":id}));
+    let args = json!({"workspaceId":1,"trackId":id,
+        "expectedRevision":read["result"]["revision"],"saveLrcFile":false,
+        "changes":{"title":"잠금 해제 후 저장"}});
+    // 다른 프로그램이 교체까지 막는 상황을 재현한다.
+    let held = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(&path)
+        .unwrap();
+    let (status, error) = rpc(&server, "track_update", args.clone());
+    assert_eq!(status, 400, "{error}");
+    assert!(error["error"].as_str().unwrap().contains("음원 교체 실패"));
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert!(!state.metadata_lock.is_poisoned());
+    let (status, current) = rpc(&server, "track_read", json!({"workspaceId":1,"trackId":id}));
+    assert_eq!(status, 200, "{current}");
+    assert_eq!(current["result"]["track"]["title"], "Original title");
+    assert_eq!(current["result"]["revision"], read["result"]["revision"]);
+    drop(held);
+    let (status, saved) = rpc(&server, "track_update", args);
+    assert_eq!(status, 200, "{saved}");
+    assert_eq!(saved["result"]["track"]["title"], "잠금 해제 후 저장");
+    assert_eq!(
+        tags::read_track_from_path(&path).unwrap().title,
+        "잠금 해제 후 저장"
+    );
+}
+
 #[test]
 fn http_rpc_and_mcp_share_scoped_tools_and_revision_checked_file_writes() {
     let dir = tempfile::tempdir().unwrap();

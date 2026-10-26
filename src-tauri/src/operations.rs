@@ -155,7 +155,7 @@ pub(crate) async fn resume_playback(state: &AppState) -> Result<PlaybackState, S
 pub(crate) async fn stop_playback(state: &AppState) -> Result<PlaybackState, String> {
     let (tx, rx) = mpsc::channel();
     state.audio.send_cmd(AudioCommand::Stop { reply: tx })?;
-    receive_audio(rx).await
+    receive_audio(rx).await?
 }
 
 pub(crate) async fn seek_playback(
