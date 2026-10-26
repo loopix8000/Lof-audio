@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "updater:keygen": "node scripts/generate-updater-key.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.2.0",

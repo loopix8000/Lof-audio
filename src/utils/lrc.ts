@@ -135,6 +135,37 @@ export function parseFilenamePatternPreview(
   return out;
 }
 
+const BRACKETED_SEGMENT =
+  /[\[({【「『〔〈《][^\])}】」』〕〉》]*[\])}】」』〕〉》]/gu;
+
+/**
+ * Picks the character shown on generated covers: skips bracketed segments
+ * like "[2019]" or "(Disc 1)", digits and symbols, then normalizes the first
+ * real letter (full-width → half-width, accents removed, upper-cased).
+ */
+export function getCoverInitial(text: string): string {
+  // NFKC folds full-width/half-width forms and circled digits (Ａ→A, （→(, ｶ→カ)
+  const normalized = (text || "").normalize("NFKC");
+  const firstLetter = (s: string) => Array.from(s).find((ch) => /\p{L}/u.test(ch));
+
+  const letter =
+    firstLetter(normalized.replace(BRACKETED_SEGMENT, " ")) ??
+    // Everything was bracketed, e.g. "[Disc 1]" → use the letters inside
+    firstLetter(normalized);
+  if (letter) {
+    // Strip accents only for alphabetic scripts (É→E); kana dakuten (ず) and Hangul stay intact
+    const base = /[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}]/u.test(letter)
+      ? letter.normalize("NFD").replace(/\p{M}/gu, "").normalize("NFC") || letter
+      : letter;
+    const upper = base.toUpperCase();
+    // Some letters expand when upper-cased (ß→SS); keep a single glyph
+    return Array.from(upper).length === 1 ? upper : base;
+  }
+
+  // Names made only of digits (e.g. "1989") still get a meaningful glyph
+  return Array.from(normalized).find((ch) => /\p{N}/u.test(ch)) ?? "♪";
+}
+
 export function getFallbackCoverUrl(title: string, artist: string): string {
   const palettes = [
     ["#f1f5f9", "#e2e8f0", "#64748b"],
@@ -146,7 +177,7 @@ export function getFallbackCoverUrl(title: string, artist: string): string {
   ];
   const seed = (title || "").length * 11 + (artist || "").length * 7;
   const [bg1, bg2, fg] = palettes[seed % palettes.length];
-  const initial = ((title || "♪").trim()[0] || "♪").toUpperCase().replace(/[<>&"']/g, "");
+  const initial = getCoverInitial(title);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
     <defs>

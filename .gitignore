@@ -14,3 +14,9 @@ src-tauri/WixTools/
 *.log
 .DS_Store
 Thumbs.db
+
+# Release signing keys (never commit)
+.private/
+
+# Local-only helper scripts
+scripts/

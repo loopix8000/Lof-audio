@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import {
   getCurrentWindow,
   LogicalSize,
@@ -7,6 +8,7 @@ import {
 } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
+  AppInfo,
   ConfirmTrackMatchItem,
   FilenamePatternInput,
   LibrarySnapshot,
@@ -14,6 +16,7 @@ import {
   MusicBrainzCandidate,
   PlaybackState,
   Playlist,
+  ScanProgress,
   TagUpdateInput,
   Track,
   TrackMatchPreview,
@@ -40,6 +43,19 @@ export async function minimizeWindow(): Promise<void> {
 export async function toggleMaximizeWindow(): Promise<void> {
   if (!isTauri()) return;
   await getCurrentWindow().toggleMaximize();
+}
+
+/** Reports the window's maximized state now and after every resize (maximize, restore, snap, drag). */
+export async function watchWindowMaximized(
+  handler: (maximized: boolean) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
+  const win = getCurrentWindow();
+  const report = () => {
+    win.isMaximized().then(handler).catch(() => {});
+  };
+  report();
+  return win.onResized(report);
 }
 
 export async function closeWindow(): Promise<void> {
@@ -241,12 +257,42 @@ export async function pickAudioFilesDialog(): Promise<string[]> {
   return [];
 }
 
+export async function onLibraryScanProgress(
+  handler: (progress: ScanProgress) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
+  return listen<ScanProgress>("library-scan-progress", (e) => handler(e.payload));
+}
+
+export async function onLibraryChanged(handler: () => void): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
+  return listen("library-changed", () => handler());
+}
+
 export const api = {
   getLibraryState: (): Promise<LibrarySnapshot> =>
     invoke("get_library_state"),
 
   scanFolder: (folderPath: string): Promise<LibrarySnapshot> =>
     invoke("scan_folder", { folderPath }),
+
+  getScanStatus: (): Promise<ScanProgress | null> =>
+    invoke("get_scan_status"),
+
+  rescanLibrary: (force: boolean): Promise<void> =>
+    invoke("rescan_library", { force }),
+
+  getSettings: (): Promise<Record<string, unknown>> =>
+    invoke("get_settings"),
+
+  saveSettings: (patch: Record<string, unknown>): Promise<void> =>
+    invoke("save_settings", { patch }),
+
+  getAppInfo: (): Promise<AppInfo> =>
+    invoke("get_app_info"),
+
+  revealDataDir: (): Promise<void> =>
+    invoke("reveal_data_dir"),
 
   importFiles: (filePaths: string[]): Promise<LibrarySnapshot> =>
     invoke("import_files", { filePaths }),

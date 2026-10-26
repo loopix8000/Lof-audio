@@ -1,7 +1,7 @@
 use crate::models::{LrcLibTrack, MusicBrainzCandidate};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use reqwest::Client;
+use reqwest::{Client, Response, StatusCode};
 use serde_json::Value;
 use std::fs::{self, File};
 use std::io::Write;
@@ -14,6 +14,35 @@ fn build_http_client() -> Result<Client, String> {
         .timeout(Duration::from_secs(12))
         .build()
         .map_err(|e| format!("HTTP 클라이언트 생성 실패: {}", e))
+}
+
+/// Backoff before each retry; LRCLIB intermittently answers 503 under load.
+const LRCLIB_RETRY_DELAYS: [Duration; 2] = [Duration::from_millis(700), Duration::from_millis(1800)];
+
+fn is_retryable_status(status: StatusCode) -> bool {
+    status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS
+}
+
+/// GETs an LRCLIB endpoint, retrying transient failures (5xx, 429, timeouts, connection errors).
+/// Returns the last response as-is when it is not retryable or retries are exhausted.
+async fn lrclib_get(
+    client: &Client,
+    url: &str,
+    query: &[(&str, String)],
+) -> Result<Response, String> {
+    let mut attempt = 0;
+    loop {
+        let result = client.get(url).query(query).send().await;
+        let retryable = match &result {
+            Ok(resp) => is_retryable_status(resp.status()),
+            Err(e) => e.is_timeout() || e.is_connect(),
+        };
+        if !retryable || attempt >= LRCLIB_RETRY_DELAYS.len() {
+            return result.map_err(|e| format!("LRCLIB 요청 실패: {}", e));
+        }
+        tokio::time::sleep(LRCLIB_RETRY_DELAYS[attempt]).await;
+        attempt += 1;
+    }
 }
 
 pub async fn fetch_lrclib_auto(
@@ -40,12 +69,7 @@ pub async fn fetch_lrclib_auto(
             params.push(("duration", format!("{:.0}", duration_secs)));
         }
 
-        if let Ok(resp) = client
-            .get("https://lrclib.net/api/get")
-            .query(&params)
-            .send()
-            .await
-        {
+        if let Ok(resp) = lrclib_get(&client, "https://lrclib.net/api/get", &params).await {
             if resp.status().is_success() {
                 if let Ok(item) = resp.json::<LrcLibTrack>().await {
                     if item.synced_lyrics.is_some() || item.plain_lyrics.is_some() {
@@ -93,15 +117,22 @@ pub async fn fetch_lrclib_auto(
 
 pub async fn search_lrclib(query: &str) -> Result<Vec<LrcLibTrack>, String> {
     let client = build_http_client()?;
-    let resp = client
-        .get("https://lrclib.net/api/search")
-        .query(&[("q", query.trim())])
-        .send()
-        .await
-        .map_err(|e| format!("LRCLIB 요청 실패: {}", e))?;
+    let resp = lrclib_get(
+        &client,
+        "https://lrclib.net/api/search",
+        &[("q", query.trim().to_string())],
+    )
+    .await?;
 
-    if !resp.status().is_success() {
-        return Err(format!("LRCLIB 응답 오류: HTTP {}", resp.status()));
+    let status = resp.status();
+    if is_retryable_status(status) {
+        return Err(format!(
+            "LRCLIB 서버가 일시적으로 응답하지 않습니다 (HTTP {}). 잠시 후 다시 시도해 주세요.",
+            status.as_u16()
+        ));
+    }
+    if !status.is_success() {
+        return Err(format!("LRCLIB 응답 오류: HTTP {}", status));
     }
 
     let items = resp
@@ -383,4 +414,19 @@ fn write_synthesized_wav(path: &Path, freqs: &[f32; 4], duration_secs: u32) -> R
     let mut file = File::create(path).map_err(|e| e.to_string())?;
     file.write_all(&buf).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Hits the live LRCLIB API; run with `cargo test -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn test_search_lrclib_survives_transient_errors() {
+        for _ in 0..6 {
+            let items = search_lrclib("tayori 風のたより").await.unwrap();
+            assert!(!items.is_empty());
+        }
+    }
 }

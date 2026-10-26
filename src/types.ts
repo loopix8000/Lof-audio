@@ -48,6 +48,21 @@ export interface LibrarySnapshot {
   playlists: Playlist[];
 }
 
+export interface AppInfo {
+  version: string;
+  dataDir: string;
+  supportedFormats: string[];
+}
+
+export interface ScanProgress {
+  folder: string;
+  processed: number;
+  total: number;
+  addedOrUpdated: number;
+  removed: number;
+  done: boolean;
+}
+
 export interface TagUpdateInput {
   trackIds: number[];
   title?: string | null;

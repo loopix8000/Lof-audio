@@ -24,6 +24,7 @@ import {
   Repeat,
   Repeat1,
   Search,
+  Settings as SettingsIcon,
   Shuffle,
   Sparkles,
   Square,
@@ -38,20 +39,25 @@ import {
   api,
   closeWindow,
   minimizeWindow,
+  onLibraryChanged,
+  onLibraryScanProgress,
   pickAudioFilesDialog,
   pickFolderDialog,
   setWindowMode,
   startWindowDrag,
   toggleMaximizeWindow,
   toggleWindowPin,
+  watchWindowMaximized,
 } from "./api";
 import {
+  AppInfo,
   ConfirmTrackMatchItem,
   LrcLibTrack,
   MusicBrainzCandidate,
   PlaybackState,
   Playlist,
   RepeatMode,
+  ScanProgress,
   Track,
   TrackMatchPreview,
 } from "./types";
@@ -62,12 +68,23 @@ import {
   getFallbackCoverUrl,
   parseFilenamePatternPreview,
 } from "./utils/lrc";
+import {
+  AppSettings,
+  DEFAULT_SETTINGS,
+  LYRIC_OFFSET_STEPS,
+  NP_ART_MAX_RANGE,
+  SortField,
+  formatOffsetStep,
+  normalizeSettings,
+} from "./settings";
 
 type AppViewMode = "library" | "player";
 type NavCategory = "all" | "favorites" | "artists" | "albums" | "folders" | "playlist";
 type LibraryLayout = "grouped" | "flat" | "grid";
-type SortField = "trackNumber" | "title" | "artist" | "album" | "durationSecs" | "year";
 type DialogTab = "tags" | "pattern" | "online" | "lyrics";
+type SettingsTab = "general" | "library" | "playback" | "lyrics" | "about";
+
+const THEME_CACHE_KEY = "lof.theme";
 
 interface ContextMenuState {
   x: number;
@@ -212,10 +229,34 @@ const naturalCompare = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
 export function App() {
-  // Theme & Main Mode ("library" vs "player")
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [appMode, setAppMode] = useState<AppViewMode>("library");
+  // Theme & Responsive Mode ("library" when width >= 740, "player" when width < 740)
+  // Cached locally only to avoid a light→dark flash before SQLite settings load
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      return localStorage.getItem(THEME_CACHE_KEY) === "dark" ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  });
+  const [windowWidth, setWindowWidth] = useState<number>(() => window.innerWidth);
+  const appMode: AppViewMode = windowWidth < 740 ? "player" : "library";
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    watchWindowMaximized(setIsMaximized).then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // Dedicated Now Playing Screen inside Library Mode (opened by clicking album art)
+  const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
 
   // Desktop Library Mode Panes & Resizable Dimensions
   const [showLeftSidebar, setShowLeftSidebar] = useState(true);
@@ -228,15 +269,16 @@ export function App() {
     pointerId: number;
   } | null>(null);
 
+  // Now-Playing split between artwork and lyrics (fraction of the shared width given to artwork)
+  const NP_HERO_RATIO_DEFAULT = 0.52;
+  const [npHeroRatio, setNpHeroRatio] = useState(NP_HERO_RATIO_DEFAULT);
+  const [resizingNpSplit, setResizingNpSplit] = useState(false);
+  const npHeroPaneRef = useRef<HTMLDivElement | null>(null);
+  const npLyricsPaneRef = useRef<HTMLDivElement | null>(null);
+  const npSplitResizeRef = useRef<{ pointerId: number } | null>(null);
+
   // Table Column Widths (title column uses 'auto' to fill remaining width smoothly)
-  const [colWidths, setColWidths] = useState({
-    num: 46,
-    artist: 180,
-    album: 180,
-    year: 60,
-    format: 64,
-    duration: 68,
-  });
+  const [colWidths, setColWidths] = useState(DEFAULT_SETTINGS.colWidths);
   const [activeColResizer, setActiveColResizer] = useState<number | null>(null);
   const colResizeRef = useRef<{
     dividerIdx: number;
@@ -347,6 +389,35 @@ export function App() {
     setLyricsPaneWidth(nextW);
   };
 
+  const handleNpSplitResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    npSplitResizeRef.current = { pointerId: e.pointerId };
+    setResizingNpSplit(true);
+  };
+
+  const handleNpSplitResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const hero = npHeroPaneRef.current;
+    const lyrics = npLyricsPaneRef.current;
+    if (!npSplitResizeRef.current || !hero || !lyrics) return;
+    const heroRect = hero.getBoundingClientRect();
+    const total = heroRect.width + lyrics.getBoundingClientRect().width;
+    if (total <= 0) return;
+    const ratio = (e.clientX - heroRect.left) / total;
+    setNpHeroRatio(Math.max(0.2, Math.min(0.75, ratio)));
+  };
+
+  const handleNpSplitResizeEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    const st = npSplitResizeRef.current;
+    if (!st) return;
+    if (e.currentTarget.hasPointerCapture(st.pointerId)) {
+      e.currentTarget.releasePointerCapture(st.pointerId);
+    }
+    npSplitResizeRef.current = null;
+    setResizingNpSplit(false);
+  };
+
   const handleLyricsResizeEnd = (e: React.PointerEvent<HTMLDivElement>) => {
     const st = lyricsResizeRef.current;
     if (!st) return;
@@ -422,6 +493,13 @@ export function App() {
   const [matchPreviews, setMatchPreviews] = useState<TrackMatchPreview[]>([]);
   const [matchCheckedMap, setMatchCheckedMap] = useState<Record<number, boolean>>({});
   const [matchSelectedCandIdx, setMatchSelectedCandIdx] = useState<Record<number, number>>({});
+  // Candidate cover URLs that failed to load (Cover Art Archive has no art for some releases)
+  const [failedCoverUrls, setFailedCoverUrls] = useState<Record<string, boolean>>({});
+  const [coverZoom, setCoverZoom] = useState<{
+    current: string;
+    candidate?: string;
+    caption: string;
+  } | null>(null);
   const [applyFieldTitle, setApplyFieldTitle] = useState(true);
   const [applyFieldArtist, setApplyFieldArtist] = useState(true);
   const [applyFieldAlbum, setApplyFieldAlbum] = useState(true);
@@ -440,32 +518,183 @@ export function App() {
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const creatingPlaylistRef = useRef(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
 
   const lyricsBoxRef = useRef<HTMLDivElement | null>(null);
   const playerLyricsRef = useRef<HTMLDivElement | null>(null);
+  const npLyricsRef = useRef<HTMLDivElement | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const notify = (msg: string) => {
     setToast(msg);
+    // Longer messages stay up longer so they can be read in full
+    const duration = Math.min(7000, 2600 + Math.max(0, msg.length - 30) * 60);
     setTimeout(() => {
       setToast((prev) => (prev === msg ? null : prev));
-    }, 2600);
+    }, duration);
   };
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  // Initial Library Load
+  // Responsive Window Width Listener (Auto-switches between Wide Library & Compact Player)
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Settings Screen & Persisted Preferences (stored in the SQLite settings table)
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [rescanOnStartup, setRescanOnStartup] = useState(DEFAULT_SETTINGS.rescanOnStartup);
+  const [saveLrcFile, setSaveLrcFile] = useState(DEFAULT_SETTINGS.saveLrcFile);
+  const [npArtMax, setNpArtMax] = useState(DEFAULT_SETTINGS.npArtMax);
+  const [lyricOffsetStepMs, setLyricOffsetStepMs] = useState(
+    DEFAULT_SETTINGS.lyricOffsetStepMs,
+  );
+
   useEffect(() => {
     api
-      .getLibraryState()
-      .then((snap) => {
-        setTracks(snap.tracks);
-        setFolders(snap.folders);
-        setPlaylists(snap.playlists);
-      })
-      .catch((err) => notify(`라이브러리 로드 오류: ${err}`));
+      .getSettings()
+      .catch(() => ({}))
+      .then((raw) => {
+        const st = normalizeSettings(raw);
+        setTheme(st.theme);
+        setAlwaysOnTop(st.alwaysOnTop);
+        if (st.alwaysOnTop) void toggleWindowPin(true);
+        setRescanOnStartup(st.rescanOnStartup);
+        setShuffle(st.shuffle);
+        setRepeatMode(st.repeatMode);
+        setNpArtMax(st.npArtMax);
+        setShowLeftSidebar(st.showLeftSidebar);
+        setShowRightLyricsInLib(st.showRightLyricsInLib);
+        setLyricsPaneWidth(st.lyricsPaneWidth);
+        setNpHeroRatio(st.npHeroRatio);
+        setColWidths(st.colWidths);
+        setSortField(st.sortField);
+        setSortAsc(st.sortAsc);
+        setSaveLrcFile(st.saveLrcFile);
+        setApplyFieldTitle(st.matchApplyFields.title);
+        setApplyFieldArtist(st.matchApplyFields.artist);
+        setApplyFieldAlbum(st.matchApplyFields.album);
+        setApplyFieldCover(st.matchApplyFields.cover);
+        setApplyFieldLyrics(st.matchApplyFields.lyrics);
+        setLyricOffsetStepMs(st.lyricOffsetStepMs);
+
+        const vol = st.muted ? 0 : st.volume;
+        setPrevVolume(st.volume);
+        setIsMuted(st.muted);
+        volumeGuardUntilRef.current = Date.now() + 500;
+        setPlayback((prev) => ({ ...prev, volume: vol }));
+        api.setVolume(vol).catch(() => {});
+        setSettingsLoaded(true);
+      });
+  }, []);
+
+  const currentSettings = useMemo<AppSettings>(
+    () => ({
+      theme,
+      alwaysOnTop,
+      rescanOnStartup,
+      volume: isMuted ? prevVolume : playback.volume,
+      muted: isMuted,
+      shuffle,
+      repeatMode,
+      npArtMax,
+      showLeftSidebar,
+      showRightLyricsInLib,
+      lyricsPaneWidth,
+      npHeroRatio,
+      colWidths,
+      sortField,
+      sortAsc,
+      saveLrcFile,
+      matchApplyFields: {
+        title: applyFieldTitle,
+        artist: applyFieldArtist,
+        album: applyFieldAlbum,
+        cover: applyFieldCover,
+        lyrics: applyFieldLyrics,
+      },
+      lyricOffsetStepMs,
+    }),
+    [
+      theme, alwaysOnTop, rescanOnStartup, isMuted, prevVolume, playback.volume, shuffle,
+      repeatMode, npArtMax, showLeftSidebar, showRightLyricsInLib, lyricsPaneWidth,
+      npHeroRatio, colWidths, sortField, sortAsc, saveLrcFile, applyFieldTitle,
+      applyFieldArtist, applyFieldAlbum, applyFieldCover, applyFieldLyrics, lyricOffsetStepMs,
+    ],
+  );
+
+  // Debounced so drags (pane widths, volume) don't write on every frame
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    try {
+      localStorage.setItem(THEME_CACHE_KEY, currentSettings.theme);
+    } catch {
+      // ignore
+    }
+    const timer = setTimeout(() => {
+      api.saveSettings({ ...currentSettings }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [settingsLoaded, currentSettings]);
+
+  const openSettings = (tab: SettingsTab = "general") => {
+    setSettingsTab(tab);
+    setSettingsOpen(true);
+    api.getAppInfo().then(setAppInfo).catch(() => {});
+  };
+
+  const handleRescanLibrary = async (force: boolean) => {
+    try {
+      await api.rescanLibrary(force);
+      notify(force ? "전체 라이브러리를 다시 색인합니다." : "변경된 파일을 다시 색인합니다.");
+    } catch (err) {
+      notify(`색인 시작 실패: ${err}`);
+    }
+  };
+
+  // Initial Library Load (served from the SQLite index cache; the backend
+  // re-indexes changed files in the background and signals via events)
+  useEffect(() => {
+    let disposed = false;
+    const unlisteners: Array<() => void> = [];
+
+    const loadLibrary = () =>
+      api
+        .getLibraryState()
+        .then((snap) => {
+          if (disposed) return;
+          setTracks(snap.tracks);
+          setFolders(snap.folders);
+          setPlaylists(snap.playlists);
+        })
+        .catch((err) => notify(`라이브러리 로드 오류: ${err}`));
+
+    (async () => {
+      // Subscribe before the first fetch so no background update is missed.
+      unlisteners.push(
+        await onLibraryScanProgress((p) => setScanProgress(p.done ? null : p)),
+        await onLibraryChanged(() => void loadLibrary()),
+      );
+      if (disposed) {
+        unlisteners.forEach((fn) => fn());
+        return;
+      }
+      await loadLibrary();
+      const status = await api.getScanStatus().catch(() => null);
+      if (!disposed && status && !status.done) setScanProgress(status);
+    })();
+
+    return () => {
+      disposed = true;
+      unlisteners.forEach((fn) => fn());
+    };
   }, []);
 
   // Clear track selection whenever navigating between categories or sub-views
@@ -510,21 +739,14 @@ export function App() {
     return () => window.removeEventListener("click", close);
   }, []);
 
-  // Switch between Wide Library Mode and Vertical 3-Tier Flat Player Mode
-  const handleSwitchAppMode = async (nextMode: AppViewMode) => {
-    if (nextMode === appMode) return;
-    setAppMode(nextMode);
-    if (nextMode === "player") {
-      await setWindowMode("player", alwaysOnTop);
-    } else {
-      await setWindowMode("desktop", alwaysOnTop);
-    }
+  const setPinned = async (next: boolean) => {
+    setAlwaysOnTop(next);
+    await toggleWindowPin(next);
   };
 
   const handleTogglePin = async () => {
     const next = !alwaysOnTop;
-    setAlwaysOnTop(next);
-    await toggleWindowPin(next);
+    await setPinned(next);
     notify(next ? "창 항상 위에 고정 켜짐" : "창 항상 위에 고정 꺼짐");
   };
 
@@ -850,7 +1072,8 @@ export function App() {
     };
     scrollTarget(lyricsBoxRef.current);
     scrollTarget(playerLyricsRef.current);
-  }, [activeLyricIdx, activeTrack?.id, appMode, showRightLyricsInLib]);
+    scrollTarget(npLyricsRef.current);
+  }, [activeLyricIdx, activeTrack?.id, appMode, showRightLyricsInLib, nowPlayingOpen]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -858,11 +1081,23 @@ export function App() {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
+      if (e.code === "Escape" && coverZoom) {
+        setCoverZoom(null);
+        return;
+      }
+      if (e.code === "Escape" && settingsOpen) {
+        setSettingsOpen(false);
+        return;
+      }
       if (e.code === "Escape" && dialogOpen) {
         setDialogOpen(false);
         return;
       }
-      if (dialogOpen) return;
+      if (e.code === "Escape" && nowPlayingOpen) {
+        setNowPlayingOpen(false);
+        return;
+      }
+      if (dialogOpen || settingsOpen) return;
 
       if (e.code === "Space") {
         e.preventDefault();
@@ -889,7 +1124,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [playback, selectedIds, displayedTracks, dialogOpen]);
+  }, [playback, selectedIds, displayedTracks, dialogOpen, nowPlayingOpen, coverZoom, settingsOpen]);
 
   // Playback Handlers
   const handlePlayTrack = async (trackId: number) => {
@@ -1088,16 +1323,12 @@ export function App() {
   const handleAddFolder = async () => {
     const folder = await pickFolderDialog();
     if (!folder) return;
-    notify("폴더 스캔 중...");
     try {
       const snap = await api.scanFolder(folder);
       setTracks(snap.tracks);
       setFolders(snap.folders);
       setPlaylists(snap.playlists);
-      if (selectedIds.length === 0 && snap.tracks.length > 0) {
-        setSelectedIds([snap.tracks[0].id]);
-      }
-      notify(`폴더 스캔 완료 (총 ${snap.tracks.length}곡)`);
+      notify("폴더를 추가했습니다. 백그라운드에서 색인합니다.");
     } catch (err) {
       notify(`스캔 실패: ${err}`);
     }
@@ -1413,7 +1644,7 @@ export function App() {
         t.id,
         hasTime ? lyricDraft : null,
         lyricDraft,
-        true
+        saveLrcFile
       );
       setTracks((prev) =>
         prev.map((item) => (item.id === updated.id ? updated : item))
@@ -1551,7 +1782,7 @@ export function App() {
           }
         }}
         onDoubleClick={(e) => {
-          if (e.target === e.currentTarget && appMode === "library") {
+          if (e.target === e.currentTarget) {
             toggleMaximizeWindow();
           }
         }}
@@ -1559,7 +1790,8 @@ export function App() {
         <div className="titlebar-left">
           <div className="app-badge">
             <div className="app-badge-dot">
-              <svg width="13" height="13" viewBox="0 0 1024 1024" fill="none">
+              {/* viewBox cropped to the note glyph (the 1024 app-icon canvas leaves it tiny at badge size) */}
+              <svg width="13" height="13" viewBox="165 140 704 704" fill="none">
                 <path
                   d="M 464 292 C 464 246, 488 222, 528 212 L 728 160 C 766 150, 788 170, 788 208 L 788 286 C 788 326, 764 348, 726 359 L 560 403 C 528 412, 516 430, 516 466 L 516 680 C 516 756, 442 824, 354 824 C 284 824, 246 776, 246 716 C 246 634, 326 554, 410 554 C 426 554, 438 556, 448 559 C 460 561, 464 554, 464 538 Z"
                   fill="currentColor"
@@ -1580,25 +1812,8 @@ export function App() {
           )}
         </div>
 
-        {/* Center Mode Switch — 1fr auto 1fr Grid guarantees zero shift & zero overlap! */}
-        <div className="titlebar-center">
-          <div className="segmented-pill">
-            <button
-              className={appMode === "library" ? "active" : ""}
-              onClick={() => handleSwitchAppMode("library")}
-            >
-              <Layers size={12} />
-              라이브러리
-            </button>
-            <button
-              className={appMode === "player" ? "active" : ""}
-              onClick={() => handleSwitchAppMode("player")}
-            >
-              <Disc size={12} />
-              플레이어
-            </button>
-          </div>
-        </div>
+        {/* Center Drag Area (Responsive Layout switches automatically by window width) */}
+        <div className="titlebar-center" />
 
         {/* Right Theme / Pin & Native Window Caption Controls */}
         <div className="titlebar-right">
@@ -1609,6 +1824,13 @@ export function App() {
               title={alwaysOnTop ? "항상 위 고정 해제" : "창 항상 위에 고정"}
             >
               <Pin size={13} />
+            </button>
+            <button
+              className={`ui-btn ghost icon-only ${settingsOpen ? "active" : ""}`}
+              onClick={() => openSettings()}
+              title="설정"
+            >
+              <SettingsIcon size={14} />
             </button>
             <button
               className="ui-btn ghost icon-only"
@@ -1623,15 +1845,28 @@ export function App() {
             <button className="win-btn" onClick={minimizeWindow} title="최소화">
               <Minus size={14} />
             </button>
-            {appMode === "library" && (
-              <button
-                className="win-btn"
-                onClick={toggleMaximizeWindow}
-                title="최대화 / 복원"
-              >
+            <button
+              className="win-btn"
+              onClick={toggleMaximizeWindow}
+              title={isMaximized ? "이전 크기로 복원" : "최대화"}
+            >
+              {isMaximized ? (
+                // Restore glyph: two overlapping windows, as in native title bars
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                >
+                  <rect x="1" y="3.5" width="7.5" height="7.5" rx="1" />
+                  <path d="M3.5 3.5V2a1 1 0 0 1 1-1H10a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1H8.5" />
+                </svg>
+              ) : (
                 <Square size={12} />
-              </button>
-            )}
+              )}
+            </button>
             <button
               className="win-btn close"
               onClick={closeWindow}
@@ -1674,10 +1909,13 @@ export function App() {
                 <div className="sidebar-section">
                   <div className="sidebar-heading">보관함</div>
                   <button
-                    className={`sidebar-item ${navCategory === "all" ? "active" : ""}`}
+                    className={`sidebar-item ${
+                      !nowPlayingOpen && navCategory === "all" ? "active" : ""
+                    }`}
                     onClick={() => {
                       setNavCategory("all");
                       setSubFilter(null);
+                      setNowPlayingOpen(false);
                     }}
                   >
                     <span className="sidebar-item-left">
@@ -1687,11 +1925,14 @@ export function App() {
                   </button>
                   <button
                     className={`sidebar-item ${
-                      navCategory === "favorites" ? "active" : ""
+                      !nowPlayingOpen && navCategory === "favorites"
+                        ? "active"
+                        : ""
                     }`}
                     onClick={() => {
                       setNavCategory("favorites");
                       setSubFilter(null);
+                      setNowPlayingOpen(false);
                     }}
                   >
                     <span className="sidebar-item-left">
@@ -1703,11 +1944,12 @@ export function App() {
                   </button>
                   <button
                     className={`sidebar-item ${
-                      navCategory === "artists" ? "active" : ""
+                      !nowPlayingOpen && navCategory === "artists" ? "active" : ""
                     }`}
                     onClick={() => {
                       setNavCategory("artists");
                       setSubFilter(null);
+                      setNowPlayingOpen(false);
                     }}
                   >
                     <span className="sidebar-item-left">
@@ -1719,11 +1961,12 @@ export function App() {
                   </button>
                   <button
                     className={`sidebar-item ${
-                      navCategory === "albums" ? "active" : ""
+                      !nowPlayingOpen && navCategory === "albums" ? "active" : ""
                     }`}
                     onClick={() => {
                       setNavCategory("albums");
                       setSubFilter(null);
+                      setNowPlayingOpen(false);
                     }}
                   >
                     <span className="sidebar-item-left">
@@ -1735,11 +1978,12 @@ export function App() {
                   </button>
                   <button
                     className={`sidebar-item ${
-                      navCategory === "folders" ? "active" : ""
+                      !nowPlayingOpen && navCategory === "folders" ? "active" : ""
                     }`}
                     onClick={() => {
                       setNavCategory("folders");
                       setSubFilter(null);
+                      setNowPlayingOpen(false);
                     }}
                   >
                     <span className="sidebar-item-left">
@@ -1790,7 +2034,9 @@ export function App() {
                     <div
                       key={pl.id}
                       className={`sidebar-item ${
-                        navCategory === "playlist" && activePlaylistId === pl.id
+                        !nowPlayingOpen &&
+                        navCategory === "playlist" &&
+                        activePlaylistId === pl.id
                           ? "active"
                           : ""
                       }`}
@@ -1798,6 +2044,7 @@ export function App() {
                       onClick={() => {
                         setNavCategory("playlist");
                         setActivePlaylistId(pl.id);
+                        setNowPlayingOpen(false);
                       }}
                     >
                       <span className="sidebar-item-left">
@@ -1821,7 +2068,20 @@ export function App() {
                 {/* Registered Folders */}
                 {folders.length > 0 && (
                   <div className="sidebar-section">
-                    <div className="sidebar-heading">등록된 폴더</div>
+                    <div className="sidebar-heading">
+                      등록된 폴더
+                      {scanProgress && (
+                        <span
+                          className="scan-indicator"
+                          title={`색인 중: ${scanProgress.folder}`}
+                        >
+                          <RefreshCw size={10} className="spin" />
+                          {scanProgress.total > 0
+                            ? `${scanProgress.processed}/${scanProgress.total}`
+                            : "확인 중"}
+                        </span>
+                      )}
+                    </div>
                     {folders.map((f) => (
                       <div
                         key={f}
@@ -1831,6 +2091,7 @@ export function App() {
                         onClick={() => {
                           setNavCategory("folders");
                           setSubFilter(f);
+                          setNowPlayingOpen(false);
                         }}
                       >
                         <span className="sidebar-item-left">
@@ -1845,7 +2106,7 @@ export function App() {
                               api.scanFolder(f).then((s) => {
                                 setTracks(s.tracks);
                                 setFolders(s.folders);
-                                notify("폴더를 다시 스캔했습니다.");
+                                notify("변경된 파일을 백그라운드에서 색인합니다.");
                               });
                             }}
                             title="폴더 다시 스캔"
@@ -1893,8 +2154,304 @@ export function App() {
               </aside>
             )}
 
-            {/* Main Surface */}
+            {/* Main Surface: Dedicated Now Playing Screen OR Library Browser */}
             <div className="inset-surface">
+              {nowPlayingOpen ? (
+                <div className="np-screen">
+                  <div className="np-header">
+                    <div className="surface-title-group">
+                      <button
+                        className="surface-back-btn"
+                        onClick={() => setNowPlayingOpen(false)}
+                        title="라이브러리 목록으로 돌아가기 (Esc)"
+                      >
+                        <ChevronLeft size={14} />
+                        <span>보관함으로 돌아가기</span>
+                      </button>
+                      <span className="surface-title">재생 화면</span>
+                      <span className="surface-subtitle">
+                        {currentViewTitle} · {displayedTracks.length}곡 대기열
+                      </span>
+                    </div>
+
+                    <div className="surface-controls">
+                      {activeTrack && (
+                        <button
+                          className="ui-btn"
+                          onClick={() =>
+                            openPropertiesDialog("lyrics", [activeTrack.id])
+                          }
+                        >
+                          <Sparkles size={13} /> 가사 검색·편집
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    className="np-body"
+                    style={
+                      {
+                        // Scaled so the factors sum above 1; grid underfills when fr totals < 1
+                        "--np-hero-fr": `${npHeroRatio * 10}fr`,
+                        "--np-lyrics-fr": `${(1 - npHeroRatio) * 10}fr`,
+                      } as React.CSSProperties
+                    }
+                  >
+                    {/* Left: Hero Artwork & Track Info */}
+                    <div className="np-hero-pane" ref={npHeroPaneRef}>
+                      <div
+                        className="np-art-frame"
+                        style={{ "--np-art-max": `${npArtMax}px` } as React.CSSProperties}
+                      >
+                        <img
+                          className="np-art-img"
+                          src={activeCover}
+                          alt=""
+                        />
+                      </div>
+
+                      <div className="np-track-info">
+                        <div className="np-badges">
+                          {activeTrack?.format && (
+                            <span className="pm-format-badge">
+                              {activeTrack.format}
+                            </span>
+                          )}
+                          {activeTrack?.year && (
+                            <span className="np-year-badge">
+                              {activeTrack.year}
+                            </span>
+                          )}
+                        </div>
+
+                        <div
+                          className="np-track-title"
+                          title={activeTrack?.title}
+                        >
+                          {activeTrack?.title || "재생 중인 곡 없음"}
+                        </div>
+
+                        <div
+                          className="np-track-artist"
+                          title={
+                            activeTrack?.artist
+                              ? `${activeTrack.artist} — 클릭하여 이 아티스트 보기`
+                              : ""
+                          }
+                          onClick={() => {
+                            if (activeTrack?.artist) {
+                              setNavCategory("artists");
+                              setSubFilter(activeTrack.artist);
+                              setNowPlayingOpen(false);
+                            }
+                          }}
+                        >
+                          {activeTrack?.artist || "트랙을 선택해 주세요"}
+                        </div>
+
+                        <div
+                          className="np-track-album"
+                          title={
+                            activeTrack?.album
+                              ? `${activeTrack.album} — 클릭하여 이 앨범 보기`
+                              : ""
+                          }
+                          onClick={() => {
+                            if (activeTrack?.album) {
+                              setNavCategory("albums");
+                              setSubFilter(activeTrack.album);
+                              setNowPlayingOpen(false);
+                            }
+                          }}
+                        >
+                          <Disc size={13} />
+                          <span>{activeTrack?.album || "-"}</span>
+                        </div>
+
+                        {activeTrack && (
+                          <div className="np-hero-actions">
+                            <button
+                              className={`ui-btn ${
+                                activeTrack.isFavorite ? "solid" : ""
+                              }`}
+                              onClick={() =>
+                                handleToggleFavorite(activeTrack.id)
+                              }
+                            >
+                              <Heart
+                                size={13}
+                                fill={
+                                  activeTrack.isFavorite
+                                    ? "currentColor"
+                                    : "none"
+                                }
+                              />
+                              {activeTrack.isFavorite ? "좋아요 표시됨" : "좋아요"}
+                            </button>
+                            <button
+                              className="ui-btn"
+                              onClick={() =>
+                                openPropertiesDialog("tags", [activeTrack.id])
+                              }
+                            >
+                              <Edit3 size={13} /> 속성·태그 편집
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Center: Large Synced Lyrics Stage */}
+                    <div className="np-lyrics-pane" ref={npLyricsPaneRef}>
+                      <div
+                        className={`pane-resizer-v ${
+                          resizingNpSplit ? "active" : ""
+                        }`}
+                        title="드래그해서 크기 조절 · 더블클릭으로 초기화"
+                        onPointerDown={handleNpSplitResizeStart}
+                        onPointerMove={handleNpSplitResizeMove}
+                        onPointerUp={handleNpSplitResizeEnd}
+                        onPointerCancel={handleNpSplitResizeEnd}
+                        onDoubleClick={() => setNpHeroRatio(NP_HERO_RATIO_DEFAULT)}
+                      />
+                      <div className="np-pane-head">
+                        <span>가사</span>
+                        {lyricLines.length > 0 && (
+                          <div className="np-sync-controls">
+                            <span className="np-sync-label">
+                              싱크 {activeTrack?.lyricOffsetMs || 0}ms
+                            </span>
+                            <button
+                              className="ui-btn ghost"
+                              style={{ height: 22, padding: "0 6px", fontSize: 11 }}
+                              onClick={() => handleOffsetChange(-lyricOffsetStepMs)}
+                            >
+                              -{formatOffsetStep(lyricOffsetStepMs)}
+                            </button>
+                            <button
+                              className="ui-btn ghost"
+                              style={{ height: 22, padding: "0 6px", fontSize: 11 }}
+                              onClick={() => handleOffsetChange(0)}
+                            >
+                              0.0s
+                            </button>
+                            <button
+                              className="ui-btn ghost"
+                              style={{ height: 22, padding: "0 6px", fontSize: 11 }}
+                              onClick={() => handleOffsetChange(lyricOffsetStepMs)}
+                            >
+                              +{formatOffsetStep(lyricOffsetStepMs)}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="np-lyrics-scroll" ref={npLyricsRef}>
+                        {lyricLines.length > 0 ? (
+                          lyricLines.map((line, idx) => (
+                            <div
+                              key={`${idx}-${line.timeSecs}`}
+                              data-lrc-idx={idx}
+                              className={`np-lyric-line ${
+                                idx === activeLyricIdx ? "active" : ""
+                              }`}
+                              onClick={() => handleSeek(line.timeSecs)}
+                            >
+                              {line.text}
+                            </div>
+                          ))
+                        ) : activeTrack?.plainLyrics ? (
+                          <pre className="np-plain-lyrics">
+                            {activeTrack.plainLyrics}
+                          </pre>
+                        ) : (
+                          <div className="np-empty-lyrics">
+                            <Music size={28} strokeWidth={1.5} />
+                            <span>등록된 가사가 없습니다</span>
+                            {activeTrack && (
+                              <button
+                                className="ui-btn"
+                                onClick={() =>
+                                  openPropertiesDialog("lyrics", [
+                                    activeTrack.id,
+                                  ])
+                                }
+                              >
+                                가사 검색·편집
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Up Next Playback Queue */}
+                    <div className="np-queue-pane">
+                      <div className="np-pane-head">
+                        <span>재생 대기열</span>
+                        <span className="np-queue-count">
+                          {displayedTracks.length}곡
+                        </span>
+                      </div>
+
+                      <div className="np-queue-list">
+                        {displayedTracks.map((t, idx) => {
+                          const isPlay = t.id === playback.currentTrackId;
+                          return (
+                            <div
+                              key={t.id}
+                              className={`np-queue-item ${
+                                isPlay ? "playing" : ""
+                              }`}
+                              onClick={() => handlePlayTrack(t.id)}
+                              onContextMenu={(e) => handleRowContextMenu(t, e)}
+                            >
+                              <div className="np-queue-num">
+                                {isPlay && playback.isPlaying ? (
+                                  <span className="eq-indicator">
+                                    <span className="eq-bar" />
+                                    <span className="eq-bar" />
+                                    <span className="eq-bar" />
+                                  </span>
+                                ) : (
+                                  t.trackNumber ?? idx + 1
+                                )}
+                              </div>
+                              <img
+                                className="np-queue-thumb"
+                                src={
+                                  t.coverDataUrl ||
+                                  getFallbackCoverUrl(t.title, t.artist)
+                                }
+                                alt=""
+                              />
+                              <div className="np-queue-meta">
+                                <div
+                                  className="np-queue-title"
+                                  title={t.title}
+                                >
+                                  {t.title}
+                                </div>
+                                <div
+                                  className="np-queue-sub"
+                                  title={`${t.artist} · ${t.album}`}
+                                >
+                                  {t.artist}
+                                </div>
+                              </div>
+                              <div className="np-queue-dur">
+                                {formatDuration(t.durationSecs)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
               <div className="main-column">
                 <div className="surface-header">
                   <div className="surface-title-group">
@@ -2522,9 +3079,9 @@ export function App() {
                         <button
                           className="ui-btn ghost"
                           style={{ height: 22, padding: "0 6px", fontSize: 11 }}
-                          onClick={() => handleOffsetChange(-100)}
+                          onClick={() => handleOffsetChange(-lyricOffsetStepMs)}
                         >
-                          -0.1s
+                          -{formatOffsetStep(lyricOffsetStepMs)}
                         </button>
                         <button
                           className="ui-btn ghost"
@@ -2536,14 +3093,16 @@ export function App() {
                         <button
                           className="ui-btn ghost"
                           style={{ height: 22, padding: "0 6px", fontSize: 11 }}
-                          onClick={() => handleOffsetChange(100)}
+                          onClick={() => handleOffsetChange(lyricOffsetStepMs)}
                         >
-                          +0.1s
+                          +{formatOffsetStep(lyricOffsetStepMs)}
                         </button>
                       </div>
                     </div>
                   )}
                 </aside>
+              )}
+                </>
               )}
             </div>
           </div>
@@ -2551,16 +3110,36 @@ export function App() {
           {/* Bottom Audio Deck (in Library Mode) */}
           <footer className="audio-deck">
             <div className="deck-track">
-              <img
-                className="deck-art"
-                src={activeCover}
-                alt=""
-                style={{ cursor: "pointer" }}
-                onClick={() => handleSwitchAppMode("player")}
-                title="플레이어 모드로 전환"
-              />
+              <div
+                className={`deck-art-wrap ${nowPlayingOpen ? "active" : ""}`}
+                onClick={() => setNowPlayingOpen((prev) => !prev)}
+                title={
+                  nowPlayingOpen
+                    ? "보관함 화면으로 돌아가기"
+                    : "클릭하여 재생 화면 열기"
+                }
+              >
+                <img className="deck-art" src={activeCover} alt="" />
+                <div className="deck-art-overlay">
+                  <ChevronDown
+                    size={16}
+                    style={{
+                      transform: nowPlayingOpen ? "rotate(0deg)" : "rotate(180deg)",
+                      transition: "transform 0.18s ease",
+                    }}
+                  />
+                </div>
+              </div>
               <div className="deck-meta">
-                <div className="deck-title" title={activeTrack?.title}>
+                <div
+                  className="deck-title clickable"
+                  title={
+                    activeTrack?.title
+                      ? `${activeTrack.title} — 클릭하여 재생 화면 열기`
+                      : ""
+                  }
+                  onClick={() => setNowPlayingOpen((prev) => !prev)}
+                >
                   {activeTrack?.title || "재생 대기 중"}
                 </div>
                 <div
@@ -2965,10 +3544,10 @@ export function App() {
               <div style={{ display: "flex", gap: 2 }}>
                 <button
                   className="pm-micro-btn"
-                  onClick={() => handleOffsetChange(-100)}
-                  title="싱크 0.1초 빠르게"
+                  onClick={() => handleOffsetChange(-lyricOffsetStepMs)}
+                  title={`싱크 ${formatOffsetStep(lyricOffsetStepMs)} 빠르게`}
                 >
-                  -0.1s
+                  -{formatOffsetStep(lyricOffsetStepMs)}
                 </button>
                 <button
                   className="pm-micro-btn"
@@ -2981,10 +3560,10 @@ export function App() {
                 </button>
                 <button
                   className="pm-micro-btn"
-                  onClick={() => handleOffsetChange(100)}
-                  title="싱크 0.1초 느리게"
+                  onClick={() => handleOffsetChange(lyricOffsetStepMs)}
+                  title={`싱크 ${formatOffsetStep(lyricOffsetStepMs)} 느리게`}
                 >
-                  +0.1s
+                  +{formatOffsetStep(lyricOffsetStepMs)}
                 </button>
               </div>
 
@@ -4021,21 +4600,70 @@ export function App() {
                               }
                             />
 
-                            <img
-                              className="t-row-thumb"
-                              style={{ width: 38, height: 38, borderRadius: 6 }}
-                              src={
-                                (applyFieldCover && cand?.coverUrl) ||
+                            {(() => {
+                              const currentCover =
                                 orig.coverDataUrl ||
-                                getFallbackCoverUrl(orig.title, orig.artist)
-                              }
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src =
-                                  orig.coverDataUrl ||
-                                  getFallbackCoverUrl(orig.title, orig.artist);
-                              }}
-                              alt=""
-                            />
+                                getFallbackCoverUrl(orig.title, orig.artist);
+                              const candCover =
+                                applyFieldCover && cand?.coverUrl
+                                  ? cand.coverUrl
+                                  : undefined;
+                              const candCoverOk =
+                                candCover && !failedCoverUrls[candCover]
+                                  ? candCover
+                                  : undefined;
+                              const caption = cand
+                                ? `${cand.album}${cand.year ? ` (${cand.year})` : ""}`
+                                : orig.album;
+                              const openZoom = () =>
+                                setCoverZoom({
+                                  current: currentCover,
+                                  candidate: candCoverOk,
+                                  caption,
+                                });
+                              return (
+                                <div className="match-cover-compare">
+                                  <button
+                                    type="button"
+                                    className={`match-cover ${candCover ? "small" : ""}`}
+                                    onClick={openZoom}
+                                    title="크게 보기"
+                                  >
+                                    <img src={currentCover} alt="" />
+                                    <span className="match-cover-label">현재</span>
+                                  </button>
+                                  {candCover && (
+                                    <>
+                                      <span className="match-cover-arrow">→</span>
+                                      <button
+                                        type="button"
+                                        className="match-cover"
+                                        onClick={openZoom}
+                                        title="크게 보기"
+                                      >
+                                        {candCoverOk ? (
+                                          <img
+                                            src={candCoverOk}
+                                            alt=""
+                                            onError={() =>
+                                              setFailedCoverUrls((prev) => ({
+                                                ...prev,
+                                                [candCover]: true,
+                                              }))
+                                            }
+                                          />
+                                        ) : (
+                                          <span className="match-cover-missing">
+                                            커버 없음
+                                          </span>
+                                        )}
+                                        <span className="match-cover-label">후보</span>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })()}
 
                             <div
                               style={{
@@ -4149,11 +4777,13 @@ export function App() {
                                     매칭된 가사 없음
                                   </span>
                                 )}
-                                {cand?.releaseId && applyFieldCover && (
-                                  <span className="match-badge">
-                                    앨범 커버 포함
-                                  </span>
-                                )}
+                                {cand?.coverUrl &&
+                                  applyFieldCover &&
+                                  !failedCoverUrls[cand.coverUrl] && (
+                                    <span className="match-badge">
+                                      앨범 커버 포함
+                                    </span>
+                                  )}
                               </div>
                             </div>
                           </div>
@@ -4308,6 +4938,354 @@ export function App() {
       )}
 
       {/* ======================== STATUS TOAST ======================== */}
+      {/* ======================== SETTINGS MODAL ======================== */}
+      {settingsOpen && (
+        <div className="modal-backdrop" onClick={() => setSettingsOpen(false)}>
+          <div
+            className="modal-box settings-box"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <span className="modal-head-title">설정</span>
+              <button
+                className="ui-btn ghost icon-only"
+                onClick={() => setSettingsOpen(false)}
+                title="닫기 (Esc)"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="modal-tabs">
+              {(
+                [
+                  ["general", "일반"],
+                  ["library", "라이브러리"],
+                  ["playback", "재생"],
+                  ["lyrics", "가사·메타데이터"],
+                  ["about", "정보"],
+                ] as [SettingsTab, string][]
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  className={`modal-tab ${settingsTab === key ? "active" : ""}`}
+                  onClick={() => setSettingsTab(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="modal-content">
+              {settingsTab === "general" && (
+                <>
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">테마</span>
+                      <span className="settings-row-desc">
+                        제목 표시줄의 달·해 아이콘으로도 바꿀 수 있습니다.
+                      </span>
+                    </div>
+                    <select
+                      className="form-field settings-control"
+                      value={theme}
+                      onChange={(e) => setTheme(e.target.value as "light" | "dark")}
+                    >
+                      <option value="light">라이트</option>
+                      <option value="dark">다크</option>
+                    </select>
+                  </div>
+                  <label className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">창 항상 위에 고정</span>
+                      <span className="settings-row-desc">
+                        다른 창 위에 Lof 창을 계속 표시합니다.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={alwaysOnTop}
+                      onChange={(e) => void setPinned(e.target.checked)}
+                    />
+                  </label>
+                  <label className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">
+                        시작할 때 변경된 파일 다시 색인
+                      </span>
+                      <span className="settings-row-desc">
+                        앱을 켤 때 등록된 폴더에서 추가·수정·삭제된 파일만 백그라운드로 반영합니다.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={rescanOnStartup}
+                      onChange={(e) => setRescanOnStartup(e.target.checked)}
+                    />
+                  </label>
+                </>
+              )}
+
+              {settingsTab === "library" && (
+                <>
+                  <div className="settings-section-head">
+                    <span>등록된 폴더</span>
+                    <button className="ui-btn" onClick={handleAddFolder}>
+                      <FolderPlus size={13} /> 폴더 추가
+                    </button>
+                  </div>
+                  {folders.length === 0 ? (
+                    <div className="settings-empty">등록된 폴더가 없습니다.</div>
+                  ) : (
+                    <div className="settings-folder-list">
+                      {folders.map((f) => (
+                        <div key={f} className="settings-folder-item" title={f}>
+                          <Folder size={13} />
+                          <span className="settings-folder-path">{f}</span>
+                          <button
+                            className="ui-btn ghost icon-only"
+                            title="폴더 제거 (파일은 삭제되지 않음)"
+                            onClick={() =>
+                              api.removeFolder(f).then((snap) => {
+                                setTracks(snap.tracks);
+                                setFolders(snap.folders);
+                                setPlaylists(snap.playlists);
+                                notify("폴더를 라이브러리에서 제거했습니다.");
+                              })
+                            }
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">다시 색인</span>
+                      <span className="settings-row-desc">
+                        {scanProgress
+                          ? `색인 중: ${scanProgress.processed}/${scanProgress.total}`
+                          : "변경분만 다시 읽거나, 캐시를 무시하고 모든 파일의 태그를 다시 읽습니다."}
+                      </span>
+                    </div>
+                    <div className="settings-control-group">
+                      <button
+                        className="ui-btn"
+                        disabled={folders.length === 0}
+                        onClick={() => handleRescanLibrary(false)}
+                      >
+                        변경분 색인
+                      </button>
+                      <button
+                        className="ui-btn"
+                        disabled={folders.length === 0}
+                        onClick={() => handleRescanLibrary(true)}
+                      >
+                        전체 다시 색인
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {settingsTab === "playback" && (
+                <>
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">볼륨</span>
+                      <span className="settings-row-desc">
+                        마지막 볼륨은 다음 실행 때도 유지됩니다.
+                      </span>
+                    </div>
+                    <div className="settings-control-group">
+                      <input
+                        type="range"
+                        className="settings-range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={isMuted ? 0 : playback.volume}
+                        onChange={(e) => handleSetVolume(Number(e.target.value))}
+                      />
+                      <span className="settings-value">
+                        {Math.round((isMuted ? 0 : playback.volume) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                  <label className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">셔플</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={shuffle}
+                      onChange={(e) => setShuffle(e.target.checked)}
+                    />
+                  </label>
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">반복</span>
+                    </div>
+                    <select
+                      className="form-field settings-control"
+                      value={repeatMode}
+                      onChange={(e) => setRepeatMode(e.target.value as RepeatMode)}
+                    >
+                      <option value="off">반복 안 함</option>
+                      <option value="all">전체 반복</option>
+                      <option value="one">한 곡 반복</option>
+                    </select>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">재생 화면 앨범아트 최대 크기</span>
+                      <span className="settings-row-desc">
+                        창이 낮으면 이보다 작게 표시될 수 있습니다.
+                      </span>
+                    </div>
+                    <div className="settings-control-group">
+                      <input
+                        type="range"
+                        className="settings-range"
+                        min={NP_ART_MAX_RANGE.min}
+                        max={NP_ART_MAX_RANGE.max}
+                        step={NP_ART_MAX_RANGE.step}
+                        value={npArtMax}
+                        onChange={(e) => setNpArtMax(Number(e.target.value))}
+                      />
+                      <span className="settings-value">{npArtMax}px</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {settingsTab === "lyrics" && (
+                <>
+                  <label className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">.lrc 파일 함께 저장</span>
+                      <span className="settings-row-desc">
+                        싱크 가사를 저장할 때 음악 파일 옆에 같은 이름의 .lrc 파일도 만듭니다.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={saveLrcFile}
+                      onChange={(e) => setSaveLrcFile(e.target.checked)}
+                    />
+                  </label>
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">자동 매칭 기본 반영 항목</span>
+                      <span className="settings-row-desc">
+                        자동 정보 매칭 창을 열 때 미리 체크될 항목입니다.
+                      </span>
+                    </div>
+                  </div>
+                  <div className="match-field-toggles">
+                    {(
+                      [
+                        ["제목", applyFieldTitle, setApplyFieldTitle],
+                        ["아티스트", applyFieldArtist, setApplyFieldArtist],
+                        ["앨범·연도", applyFieldAlbum, setApplyFieldAlbum],
+                        ["앨범 커버", applyFieldCover, setApplyFieldCover],
+                        ["가사(LRC)", applyFieldLyrics, setApplyFieldLyrics],
+                      ] as [string, boolean, (v: boolean) => void][]
+                    ).map(([label, value, set]) => (
+                      <label key={label}>
+                        <input
+                          type="checkbox"
+                          checked={value}
+                          onChange={(e) => set(e.target.checked)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">가사 싱크 조정 단위</span>
+                      <span className="settings-row-desc">
+                        가사 패널의 -/+ 버튼을 한 번 누를 때 움직이는 시간입니다.
+                      </span>
+                    </div>
+                    <select
+                      className="form-field settings-control"
+                      value={lyricOffsetStepMs}
+                      onChange={(e) => setLyricOffsetStepMs(Number(e.target.value))}
+                    >
+                      {LYRIC_OFFSET_STEPS.map((ms) => (
+                        <option key={ms} value={ms}>
+                          {formatOffsetStep(ms)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {settingsTab === "about" && (
+                <>
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">버전</span>
+                    </div>
+                    <span className="settings-value">{appInfo?.version ?? "-"}</span>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">데이터 폴더</span>
+                      <span className="settings-row-desc settings-path">
+                        {appInfo?.dataDir ?? "-"}
+                      </span>
+                    </div>
+                    <button
+                      className="ui-btn"
+                      disabled={!appInfo}
+                      onClick={() =>
+                        api.revealDataDir().catch((err) => notify(`폴더 열기 실패: ${err}`))
+                      }
+                    >
+                      <Folder size={13} /> 열기
+                    </button>
+                  </div>
+                  <div className="settings-row">
+                    <div className="settings-row-text">
+                      <span className="settings-row-title">지원 형식</span>
+                      <span className="settings-row-desc">
+                        {appInfo?.supportedFormats.map((f) => f.toUpperCase()).join(", ") ??
+                          "-"}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Album art comparison lightbox (opened from auto-match candidates) */}
+      {coverZoom && (
+        <div className="cover-zoom-backdrop" onClick={() => setCoverZoom(null)}>
+          <div className="cover-zoom-body">
+            <figure>
+              <img src={coverZoom.current} alt="" />
+              <figcaption>현재 커버</figcaption>
+            </figure>
+            {coverZoom.candidate && (
+              <figure>
+                <img src={coverZoom.candidate} alt="" />
+                <figcaption>후보 커버 · {coverZoom.caption}</figcaption>
+              </figure>
+            )}
+          </div>
+          <span className="cover-zoom-hint">클릭하거나 Esc를 눌러 닫기</span>
+        </div>
+      )}
+
       {toast && <div className="status-toast">{toast}</div>}
     </div>
   );

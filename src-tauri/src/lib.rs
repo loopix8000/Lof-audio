@@ -1,27 +1,29 @@
 pub mod audio;
 pub mod db;
 pub mod models;
+pub mod scanner;
 pub mod services;
 pub mod tags;
 
 use audio::{AudioCommand, AudioEngine};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
-use db::Database;
+use db::{Database, FileStamp};
 use models::{
     ConfirmTrackMatchItem, FilenamePatternInput, LrcLibTrack, MusicBrainzCandidate, PlaybackState,
     Playlist, TagUpdateInput, Track, TrackMatchPreview,
 };
+use scanner::{ScanProgress, ScanQueue};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use tauri::{Manager, State};
-use walkdir::WalkDir;
 
 pub struct AppState {
     pub db: Database,
     pub audio: AudioEngine,
     pub app_data_dir: PathBuf,
+    pub scanner: ScanQueue,
 }
 
 #[derive(Serialize)]
@@ -32,12 +34,10 @@ pub struct LibrarySnapshot {
     pub playlists: Vec<Playlist>,
 }
 
-fn is_supported_audio(path: &Path) -> bool {
+pub(crate) fn is_supported_audio(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-        matches!(
-            ext.to_ascii_lowercase().as_str(),
-            "mp3" | "flac" | "wav" | "ogg" | "m4a" | "aac" | "alac" | "opus"
-        )
+        let ext = ext.to_ascii_lowercase();
+        SUPPORTED_AUDIO_EXTENSIONS.contains(&ext.as_str())
     } else {
         false
     }
@@ -70,17 +70,79 @@ async fn scan_folder(
     }
 
     state.db.add_folder(&folder_path)?;
-
-    for entry in WalkDir::new(root).follow_links(true).into_iter().flatten() {
-        let p = entry.path();
-        if p.is_file() && is_supported_audio(p) {
-            if let Some(track) = tags::read_track_from_path(p) {
-                let _ = state.db.upsert_track(&track);
-            }
-        }
-    }
+    // Indexing runs on the scanner worker; the UI gets the cached snapshot right away.
+    state.scanner.enqueue(&folder_path);
 
     build_snapshot(&state)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    pub version: String,
+    pub data_dir: String,
+    pub supported_formats: Vec<&'static str>,
+}
+
+pub(crate) const SUPPORTED_AUDIO_EXTENSIONS: [&str; 8] =
+    ["mp3", "flac", "wav", "ogg", "m4a", "aac", "alac", "opus"];
+
+#[tauri::command]
+async fn get_settings(
+    state: State<'_, AppState>,
+) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    state.db.get_settings()
+}
+
+#[tauri::command]
+async fn save_settings(
+    patch: serde_json::Map<String, serde_json::Value>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.db.save_settings(&patch)
+}
+
+/// Queues every registered folder for re-indexing; `force` ignores the size/mtime cache.
+#[tauri::command]
+async fn rescan_library(force: bool, state: State<'_, AppState>) -> Result<(), String> {
+    if force {
+        state.db.clear_file_stamps()?;
+    }
+    for folder in state.db.get_folders()? {
+        state.scanner.enqueue(&folder);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_app_info(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<AppInfo, String> {
+    Ok(AppInfo {
+        version: app.package_info().version.to_string(),
+        data_dir: state.app_data_dir.to_string_lossy().to_string(),
+        supported_formats: SUPPORTED_AUDIO_EXTENSIONS.to_vec(),
+    })
+}
+
+/// Opens the app data folder (library DB lives here) in the OS file manager.
+#[tauri::command]
+async fn reveal_data_dir(state: State<'_, AppState>) -> Result<(), String> {
+    let dir = &state.app_data_dir;
+    #[cfg(target_os = "windows")]
+    let program = "explorer";
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    let program = "xdg-open";
+    std::process::Command::new(program)
+        .arg(dir)
+        .spawn()
+        .map_err(|e| format!("폴더 열기 실패: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_scan_status(state: State<'_, AppState>) -> Result<Option<ScanProgress>, String> {
+    Ok(state.scanner.status())
 }
 
 #[tauri::command]
@@ -88,17 +150,26 @@ async fn import_files(
     file_paths: Vec<String>,
     state: State<'_, AppState>,
 ) -> Result<LibrarySnapshot, String> {
+    let mut items = Vec::new();
     for fp in file_paths {
         let p = Path::new(&fp);
-        if p.is_file() && is_supported_audio(p) {
-            if let Some(track) = tags::read_track_from_path(p) {
-                if !track.folder_path.is_empty() {
-                    let _ = state.db.add_folder(&track.folder_path);
-                }
-                let _ = state.db.upsert_track(&track);
+        if !is_supported_audio(p) {
+            continue;
+        }
+        let Ok(meta) = std::fs::metadata(p) else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        if let Some(track) = tags::read_track_from_path(p) {
+            if !track.folder_path.is_empty() {
+                let _ = state.db.add_folder(&track.folder_path);
             }
+            items.push((track, FileStamp::of(&meta)));
         }
     }
+    state.db.upsert_tracks(&items)?;
     build_snapshot(&state)
 }
 
@@ -695,7 +766,7 @@ async fn apply_confirmed_matches(
             if item.plain_lyrics.is_none() {
                 track.plain_lyrics = Some(tags::strip_lrc_timestamps(&synced));
             }
-            save_lrc = true;
+            save_lrc = state.db.get_setting_bool("saveLrcFile", true);
         }
         if let Some(plain) = item.plain_lyrics.filter(|s| !s.trim().is_empty()) {
             track.plain_lyrics = Some(plain);
@@ -729,6 +800,7 @@ async fn batch_auto_enrich(
     fetch_lyrics: bool,
     state: State<'_, AppState>,
 ) -> Result<Vec<Track>, String> {
+    let save_lrc = state.db.get_setting_bool("saveLrcFile", true);
     for tid in track_ids {
         let maybe_track = state.db.get_track_by_id(tid)?;
         let Some(mut track) = maybe_track else {
@@ -799,7 +871,7 @@ async fn batch_auto_enrich(
             Some(&track.genre),
             track.plain_lyrics.as_deref(),
             track.cover_data_url.as_deref(),
-            true,
+            save_lrc,
             track.synced_lyrics.as_deref(),
         );
         let _ = state.db.update_track_metadata(&track);
@@ -857,19 +929,39 @@ pub fn run() {
 
             let db = Database::new(&db_path).expect("Failed to initialize SQLite database");
             let audio = AudioEngine::new();
+            let (scanner, scan_rx) = ScanQueue::new();
+            let folders = if db.get_setting_bool("rescanOnStartup", true) {
+                db.get_folders().unwrap_or_default()
+            } else {
+                Vec::new()
+            };
 
             let state = AppState {
                 db,
                 audio,
                 app_data_dir,
+                scanner,
             };
 
             app.manage(state);
+
+            // Library loads from the SQLite cache; changed files are re-indexed in the background.
+            scanner::spawn_worker(app.handle().clone(), scan_rx);
+            let state = app.state::<AppState>();
+            for folder in &folders {
+                state.scanner.enqueue(folder);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_library_state,
             scan_folder,
+            get_scan_status,
+            get_settings,
+            save_settings,
+            rescan_library,
+            get_app_info,
+            reveal_data_dir,
             import_files,
             remove_folder,
             delete_tracks_from_library,
