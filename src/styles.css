@@ -146,6 +146,7 @@ button svg {
   gap: 5px;
 }
 .workspace-heading { justify-content: space-between; font-size: 11px; }
+.workspace-heading > span:first-child { white-space: nowrap; }
 .workspace-picker, .workspace-actions {
   display: flex;
   align-items: center;
@@ -153,8 +154,7 @@ button svg {
   min-width: 0;
 }
 .workspace-select { flex: 1; height: 28px; }
-.workspace-actions { justify-content: flex-end; }
-.workspace-folder-count { color: var(--text-muted); white-space: nowrap; font-size: 11px; }
+.workspace-actions { justify-content: flex-end; flex-shrink: 0; gap: 2px; }
 .workspace-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .workspace-form input { flex: 1 1 100%; min-width: 0; height: 28px; }
 .workspace-delete-confirm { flex-wrap: wrap; }

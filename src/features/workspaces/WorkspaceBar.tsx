@@ -5,7 +5,7 @@ import { Select } from "../../components/Select";
 
 export function WorkspaceBar() {
   const {
-    workspaces, activeWorkspace, activeWorkspaceId, workspaceBusy, folders,
+    workspaces, activeWorkspace, activeWorkspaceId, workspaceBusy,
     handleSelectWorkspace, handleCreateWorkspace, handleRenameWorkspace, handleDeleteWorkspace,
   } = useAudioAppContext();
   const [mode, setMode] = useState<"create" | "rename" | "delete" | null>(null);
@@ -23,21 +23,20 @@ export function WorkspaceBar() {
   return <section className="workspace-bar" aria-label="워크스페이스 관리">
     <div className="workspace-heading">
       <span><Layers size={13} aria-hidden="true" /> 워크스페이스</span>
-      <span className="workspace-folder-count">폴더 {folders.length}</span>
+      <div className="workspace-actions" role="group" aria-label="워크스페이스 작업">
+        <button className="ui-btn ghost icon-only" title="워크스페이스 만들기" aria-label="워크스페이스 만들기" disabled={workspaceBusy || !activeWorkspace}
+          onClick={() => { setName(""); setMode("create"); }}><Plus size={14} /></button>
+        <button className="ui-btn ghost icon-only" title="워크스페이스 이름 변경" aria-label="워크스페이스 이름 변경" disabled={workspaceBusy || !activeWorkspace}
+          onClick={() => { setName(activeWorkspace?.name ?? ""); setMode("rename"); }}><Edit3 size={13} /></button>
+        <button className="ui-btn ghost icon-only" title="워크스페이스 삭제" aria-label="워크스페이스 삭제" disabled={workspaceBusy || workspaces.length < 2}
+          onClick={() => setMode("delete")}><Trash2 size={13} /></button>
+      </div>
     </div>
     <div className="workspace-picker">
       <Select className="workspace-select" aria-label="워크스페이스" value={activeWorkspaceId ?? ""}
         placeholder="불러오는 중..." disabled={workspaceBusy || !activeWorkspace}
         onChange={value => void handleSelectWorkspace(Number(value))}
         options={workspaces.map(workspace => ({ value: workspace.id, label: workspace.name }))} />
-    </div>
-    <div className="workspace-actions">
-      <button className="ui-btn ghost icon-only" title="워크스페이스 만들기" disabled={workspaceBusy || !activeWorkspace}
-        onClick={() => { setName(""); setMode("create"); }}><Plus size={14} /></button>
-      <button className="ui-btn ghost icon-only" title="워크스페이스 이름 변경" disabled={workspaceBusy || !activeWorkspace}
-        onClick={() => { setName(activeWorkspace?.name ?? ""); setMode("rename"); }}><Edit3 size={13} /></button>
-      <button className="ui-btn ghost icon-only" title="워크스페이스 삭제" disabled={workspaceBusy || workspaces.length < 2}
-        onClick={() => setMode("delete")}><Trash2 size={13} /></button>
     </div>
     {(mode === "create" || mode === "rename") && <form className="workspace-form" onSubmit={event => void submit(event)}>
       <input autoFocus required maxLength={80} className="form-field" aria-label="워크스페이스 이름" value={name}
