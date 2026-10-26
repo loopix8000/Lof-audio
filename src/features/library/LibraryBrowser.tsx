@@ -1,8 +1,9 @@
-import { ChevronLeft, Edit3, PanelRight, Music, FolderPlus, FilePlus } from "lucide-react";
+import { ChevronLeft, Edit3, PanelRight, Music, FolderPlus, FilePlus, LayoutGrid, FolderTree } from "lucide-react";
 import { formatDuration } from "../../utils/lrc";
 import { VirtualTrackTable } from "../../components/TrackRows";
 import { TrackTableHeader } from "./TrackTableHeader";
 import { useAudioAppContext } from "../../app/AppContext";
+import { FolderDirectory } from "./FolderDirectory";
 
 export function LibraryBrowser() {
   const {
@@ -15,6 +16,8 @@ export function LibraryBrowser() {
     searchFilteredTracks,
     albumCards,
     folderCards,
+    folderViewMode,
+    setFolderViewMode,
     displayedTracks,
     totalDisplayedDuration,
     selectedIds,
@@ -43,7 +46,7 @@ export function LibraryBrowser() {
             <button
               className="surface-back-btn"
               onClick={() => setSubFilter(null)}
-              title="상위 그리드 목록으로 돌아가기"
+              title="전체 목록으로 돌아가기"
             >
               <ChevronLeft size={14} />
               <span>
@@ -73,6 +76,28 @@ export function LibraryBrowser() {
       </div>
 
       <div className="surface-controls">
+        {navCategory === "folders" && (
+          <div className="folder-view-switch" role="group" aria-label="폴더 보기 방식">
+            <button
+              className="ui-btn ghost icon-only"
+              title="그리드 보기"
+              aria-label="그리드 보기"
+              aria-pressed={folderViewMode === "grid"}
+              onClick={() => setFolderViewMode("grid")}
+            >
+              <LayoutGrid size={14} />
+            </button>
+            <button
+              className="ui-btn ghost icon-only"
+              title="디렉터리 보기"
+              aria-label="디렉터리 보기"
+              aria-pressed={folderViewMode === "directory"}
+              onClick={() => setFolderViewMode("directory")}
+            >
+              <FolderTree size={14} />
+            </button>
+          </div>
+        )}
         {selectedIds.length > 0 && (
           <button
             className="ui-btn"
@@ -98,11 +123,9 @@ export function LibraryBrowser() {
       </div>
     </div>
 
-    {/* Contextual Content Viewport:
-                    - All Music -> Grouped Table
-                    - Favorites / Playlist -> Flat Table
-                    - Artists / Albums / Folders -> Grid View at top level, Grouped Table when clicked! */}
-    {displayedTracks.length === 0 ? (
+    {effectiveLibView === "folder-directory" ? (
+      <FolderDirectory />
+    ) : displayedTracks.length === 0 ? (
       <div
         style={{
           margin: "auto",

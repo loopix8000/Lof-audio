@@ -22,6 +22,7 @@ export function useLibraryView({
     searchQuery,
     sortField,
     sortAsc,
+    folderViewMode,
   } = libraryState;
   const displayedTracks = useMemo(() => {
     let list = [...tracks];
@@ -101,7 +102,7 @@ export function useLibraryView({
   );
 
   const effectiveLibView = useMemo<
-    "grouped" | "flat" | "artist-grid" | "album-grid" | "folder-grid"
+    "grouped" | "flat" | "artist-grid" | "album-grid" | "folder-grid" | "folder-directory"
   >(() => {
     if (navCategory === "all") return "grouped";
     if (navCategory === "favorites" || navCategory === "playlist") return "flat";
@@ -112,10 +113,11 @@ export function useLibraryView({
       return subFilter === null ? "album-grid" : "grouped";
     }
     if (navCategory === "folders") {
+      if (folderViewMode === "directory") return "folder-directory";
       return subFilter === null ? "folder-grid" : "grouped";
     }
     return "grouped";
-  }, [navCategory, subFilter]);
+  }, [navCategory, subFilter, folderViewMode]);
 
   const searchFilteredTracks = useMemo(() => {
     if (!searchQuery.trim()) return tracks;

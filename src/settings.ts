@@ -3,6 +3,7 @@ import { RepeatMode } from "./types";
 export type SortField = "trackNumber" | "title" | "artist" | "album" | "durationSecs" | "year";
 
 export type UpdateChannel = "stable" | "beta";
+export type FolderViewMode = "grid" | "directory";
 
 export interface ColumnWidths {
   num: number;
@@ -41,6 +42,7 @@ export interface AppSettings {
   colWidths: ColumnWidths;
   sortField: SortField;
   sortAsc: boolean;
+  folderViewMode: FolderViewMode;
   // Lyrics & metadata
   saveLrcFile: boolean;
   matchApplyFields: MatchApplyFields;
@@ -66,6 +68,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   colWidths: { num: 46, artist: 180, album: 180, year: 60, format: 64, duration: 68 },
   sortField: "album",
   sortAsc: true,
+  folderViewMode: "grid",
   saveLrcFile: true,
   matchApplyFields: { title: true, artist: true, album: true, cover: true, lyrics: true },
   lyricOffsetStepMs: 100,
@@ -122,6 +125,7 @@ export function normalizeSettings(raw: Record<string, unknown>): AppSettings {
       ["trackNumber", "title", "artist", "album", "durationSecs", "year"].includes(v as string),
     ),
     sortAsc: pick(raw.sortAsc, d.sortAsc, isBool),
+    folderViewMode: pick(raw.folderViewMode, d.folderViewMode, v => v === "grid" || v === "directory"),
     saveLrcFile: pick(raw.saveLrcFile, d.saveLrcFile, isBool),
     matchApplyFields,
     lyricOffsetStepMs: pick(raw.lyricOffsetStepMs, d.lyricOffsetStepMs, (v) =>

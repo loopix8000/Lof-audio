@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Track, Playlist, ScanProgress, Workspace, WorkspaceState, LibrarySnapshot } from "../../types";
-import { SortField } from "../../settings";
+import { DEFAULT_SETTINGS, FolderViewMode, SortField } from "../../settings";
 import { api, onLibraryScanProgress, onLibraryChanged, onAutomationLibraryChanged } from "../../api";
 import { mergeTrackChanges } from "../../library";
 import { NavCategory, ContextMenuState } from "../../app/types";
@@ -67,6 +67,7 @@ export function useLibraryState({
   const [sortField, setSortField] = useState<SortField>("album");
 
   const [sortAsc, setSortAsc] = useState(true);
+  const [folderViewMode, setFolderViewMode] = useState<FolderViewMode>(DEFAULT_SETTINGS.folderViewMode);
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
@@ -178,6 +179,8 @@ export function useLibraryState({
     searchQuery,
     sortField,
     sortAsc,
+    folderViewMode,
+    setFolderViewMode,
     selectedIds,
     setTracks,
     lastClickedId,

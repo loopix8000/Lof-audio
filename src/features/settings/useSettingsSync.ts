@@ -74,7 +74,7 @@ export function useSettingsSync({
     shuffle,
     repeatMode,
   } = playbackState;
-  const { setSortField, setSortAsc, sortField, sortAsc } = libraryState;
+  const { setSortField, setSortAsc, sortField, sortAsc, folderViewMode, setFolderViewMode } = libraryState;
   const {
     setApplyFieldTitle,
     setApplyFieldArtist,
@@ -117,6 +117,7 @@ export function useSettingsSync({
         setColWidths(st.colWidths);
         setSortField(st.sortField);
         setSortAsc(st.sortAsc);
+        setFolderViewMode(st.folderViewMode);
         setSaveLrcFile(st.saveLrcFile);
         setApplyFieldTitle(st.matchApplyFields.title);
         setApplyFieldArtist(st.matchApplyFields.artist);
@@ -166,6 +167,7 @@ export function useSettingsSync({
       colWidths,
       sortField,
       sortAsc,
+      folderViewMode,
       saveLrcFile,
       matchApplyFields: {
         title: applyFieldTitle,
@@ -182,7 +184,7 @@ export function useSettingsSync({
       updateChannel, autoCheckUpdates,
       theme, alwaysOnTop, rescanOnStartup, isMuted, prevVolume, playback.volume, shuffle,
       repeatMode, npArtMax, showLeftSidebar, showRightLyricsInLib, lyricsPaneWidth,
-      npHeroRatio, colWidths, sortField, sortAsc, saveLrcFile, applyFieldTitle,
+      npHeroRatio, colWidths, sortField, sortAsc, folderViewMode, saveLrcFile, applyFieldTitle,
       applyFieldArtist, applyFieldAlbum, applyFieldCover, applyFieldLyrics, lyricOffsetStepMs,
     ],
   );
