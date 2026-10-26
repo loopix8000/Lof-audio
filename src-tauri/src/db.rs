@@ -104,6 +104,7 @@ impl Database {
                 FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
             );
 
+            -- Removes tracks left by the former built-in demo library
             DELETE FROM tracks WHERE folder_path LIKE '%demo_music%';
             DELETE FROM folders WHERE path LIKE '%demo_music%';
             INSERT OR IGNORE INTO folders (path) SELECT DISTINCT folder_path FROM tracks WHERE folder_path != '';

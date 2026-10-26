@@ -7,8 +7,6 @@ pub mod tags;
 pub mod updater;
 
 use audio::{AudioCommand, AudioEngine};
-use base64::engine::general_purpose::STANDARD as BASE64;
-use base64::Engine;
 use db::{Database, FileStamp};
 use models::{
     ConfirmTrackMatchItem, FilenamePatternInput, LrcLibTrack, MusicBrainzCandidate, PlaybackState,
@@ -191,79 +189,6 @@ async fn delete_tracks_from_library(
     state: State<'_, AppState>,
 ) -> Result<LibrarySnapshot, String> {
     state.db.delete_tracks(&track_ids)?;
-    build_snapshot(&state)
-}
-
-fn make_svg_cover_data_url(bg1: &str, bg2: &str, accent: &str, title: &str, sub: &str) -> String {
-    let svg = format!(
-        r##"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="0 0 500 500">
-            <defs>
-                <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="{bg1}"/>
-                    <stop offset="100%" stop-color="{bg2}"/>
-                </linearGradient>
-            </defs>
-            <rect width="500" height="500" fill="url(#g)"/>
-            <circle cx="250" cy="215" r="115" fill="none" stroke="{accent}" stroke-width="6" opacity="0.75"/>
-            <circle cx="250" cy="215" r="42" fill="{accent}" opacity="0.9"/>
-            <circle cx="250" cy="215" r="14" fill="{bg1}"/>
-            <text x="250" y="395" font-family="sans-serif" font-size="28" font-weight="700" fill="#ffffff" text-anchor="middle">{title}</text>
-            <text x="250" y="432" font-family="sans-serif" font-size="18" font-weight="500" fill="{accent}" text-anchor="middle">{sub}</text>
-        </svg>"##
-    );
-    format!("data:image/svg+xml;base64,{}", BASE64.encode(svg.as_bytes()))
-}
-
-#[tauri::command]
-async fn load_demo_tracks(state: State<'_, AppState>) -> Result<LibrarySnapshot, String> {
-    let demo_dir = state.app_data_dir.join("demo_music");
-    let paths = services::create_demo_tracks_in_dir(&demo_dir)?;
-    state
-        .db
-        .add_folder(&demo_dir.to_string_lossy().to_string())?;
-
-    let covers = [
-        (
-            "Cyberpunk Dreams",
-            2026u32,
-            1u32,
-            "Synthwave",
-            make_svg_cover_data_url("#140b29", "#3b0d54", "#ff2a85", "MIDNIGHT NEON", "LOF SYNTH"),
-        ),
-        (
-            "Late Night Coding",
-            2025u32,
-            2u32,
-            "Lo-Fi Chillhop",
-            make_svg_cover_data_url("#0d1b2a", "#1b263b", "#38bdf8", "SEOUL RAINY", "AURORA BEATS"),
-        ),
-        (
-            "Cosmos Anthology",
-            2026u32,
-            3u32,
-            "Ambient Electronic",
-            make_svg_cover_data_url("#0f172a", "#311042", "#a855f7", "STARLIGHT", "VELVET HORIZON"),
-        ),
-    ];
-
-    for (idx, p_str) in paths.iter().enumerate() {
-        let p = Path::new(p_str);
-        if let Some(mut track) = tags::read_track_from_path(p) {
-            if idx < covers.len() {
-                let (album, year, tn, genre, cover_url) = &covers[idx];
-                track.album = album.to_string();
-                track.year = Some(*year);
-                track.track_number = Some(*tn);
-                track.genre = genre.to_string();
-                track.cover_data_url = Some(cover_url.clone());
-                track.bitrate = Some(1411);
-                track.sample_rate = Some(44100);
-                track.channels = Some(2);
-            }
-            let _ = state.db.upsert_track(&track);
-        }
-    }
-
     build_snapshot(&state)
 }
 
@@ -970,7 +895,6 @@ pub fn run() {
             import_files,
             remove_folder,
             delete_tracks_from_library,
-            load_demo_tracks,
             play_track,
             pause_playback,
             resume_playback,

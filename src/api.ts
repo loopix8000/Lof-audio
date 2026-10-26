@@ -303,9 +303,6 @@ export const api = {
   deleteTracksFromLibrary: (trackIds: number[]): Promise<LibrarySnapshot> =>
     invoke("delete_tracks_from_library", { trackIds }),
 
-  loadDemoTracks: (): Promise<LibrarySnapshot> =>
-    invoke("load_demo_tracks"),
-
   playTrack: (trackId: number): Promise<PlaybackState> =>
     invoke("play_track", { trackId }),
 
