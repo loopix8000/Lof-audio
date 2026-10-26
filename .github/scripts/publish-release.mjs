@@ -20,12 +20,13 @@ function gh(...args) {
 }
 
 try {
-  const release = JSON.parse(gh("release", "view", tag, "--json", "assets,isDraft,isPrerelease,targetCommitish"));
+  const release = JSON.parse(gh("release", "view", tag, "--json", "assets,isDraft,isPrerelease,targetCommitish,body"));
   if (release.isPrerelease !== version.includes("-")) throw new Error("Release channel does not match the version.");
   gh("release", "download", tag, "--pattern", "latest.json", "--dir", temporary);
   const manifestPath = path.join(temporary, "latest.json");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   if (manifest.version.replace(/^v/, "") !== version) throw new Error("Updater version mismatch.");
+  manifest.notes = release.body;
   const platform = manifest.platforms?.["windows-x86_64-nsis"] ?? manifest.platforms?.["windows-x86_64"];
   if (!platform?.signature) throw new Error("Signed Windows updater entry is missing.");
   const download = new URL(platform.url);
