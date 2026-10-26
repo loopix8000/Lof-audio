@@ -24,3 +24,6 @@ Thumbs.db
 
 # Generated at release time (contains the updater public key)
 src-tauri/tauri.updater.generated.json
+
+# Local agent instructions
+/AGENTS.md
