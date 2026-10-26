@@ -1775,15 +1775,15 @@ export function App() {
       {/* ======================== UNIFIED 3-COLUMN GRID TITLEBAR ======================== */}
       <header
         className="titlebar"
-        data-tauri-drag-region
+        // One handler for both gestures: the OS swallows `dblclick` once a drag starts,
+        // so the second press (detail === 2) toggles maximize instead of dragging again.
         onMouseDown={(e) => {
-          if (e.button === 0 && e.target === e.currentTarget) {
-            startWindowDrag();
-          }
-        }}
-        onDoubleClick={(e) => {
-          if (e.target === e.currentTarget) {
+          if (e.button !== 0) return;
+          if ((e.target as HTMLElement).closest("button, input, select, textarea, a")) return;
+          if (e.detail === 2) {
             toggleMaximizeWindow();
+          } else {
+            startWindowDrag();
           }
         }}
       >
