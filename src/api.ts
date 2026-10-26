@@ -11,12 +11,13 @@ import {
   LibrarySnapshot,
   LrcLibTrack,
   MusicBrainzCandidate,
+  AlbumCandidate,
+  AlbumTrackMatch,
   PlaybackState,
   Playlist,
   ScanProgress,
   TagUpdateInput,
   Track,
-  TrackMatchPreview,
   WorkspaceState,
   AutomationInfo,
   AudioSkillStatus,
@@ -248,8 +249,11 @@ export const api = {
       customQuery: customQuery || null,
     }),
 
-  previewAutoMatch: (trackIds: number[]): Promise<TrackMatchPreview[]> =>
-    invoke("preview_auto_match", { trackIds }),
+  searchAlbumMetadata: (trackId: number, customQuery?: string): Promise<AlbumCandidate[]> =>
+    invoke("search_album_metadata", { trackId, customQuery: customQuery || null }),
+
+  previewAlbumMetadata: (trackIds: number[], releaseId: string): Promise<AlbumTrackMatch[]> =>
+    invoke("preview_album_metadata", { trackIds, releaseId }),
 
   applyConfirmedMatches: (
     items: ConfirmTrackMatchItem[]

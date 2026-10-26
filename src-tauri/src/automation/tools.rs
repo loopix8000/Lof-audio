@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 use std::sync::OnceLock;
 
-pub const INSTRUCTIONS: &str = "Lof Audio 앱이 실행 중이어야 합니다. workspace_list로 실제 workspaceId를 확인하고 library_search로 trackId를 찾으세요. 조회와 변경은 지정한 워크스페이스만 대상으로 합니다. track_update 전 track_read의 revision을 expectedRevision으로 전달하고, CONFLICT이면 최신 내용을 다시 읽어 요청한 필드만 수정하세요. 음악 파일·가사 쓰기는 사용자 요청 범위에서만 수행하세요. folder_add/rescan은 비동기 색인이므로 scan_status와 library_search로 완료를 확인하세요. skill_status/skill_get으로 앱에 포함된 스킬을 받고, 같은 기기의 실제 스킬 폴더를 확인한 경우 skill_install로 설치할 수 있습니다. 오류 응답은 완료로 취급하지 마세요.";
+pub const INSTRUCTIONS: &str = "Lof Audio 앱이 실행 중이어야 합니다. workspace_list로 실제 workspaceId를 확인하고 library_search로 trackId를 찾으세요. 조회와 변경은 지정한 워크스페이스만 대상으로 합니다. track_update 전 track_read의 revision을 expectedRevision으로 전달하고, CONFLICT이면 최신 내용을 다시 읽어 요청한 필드만 수정하세요. 음악 메타정보를 조사·정정할 때는 metadata_research_prepare로 맥락을 읽고 AI가 웹·다른 MCP 등 여러 독립 출처를 직접 확인한 뒤 metadata_research_preview/apply/history를 사용하세요. 서버의 근거 검사는 AI가 제출한 관측값을 비교하며 웹 페이지를 대신 읽지 않습니다. 음악 파일·가사 쓰기는 사용자 요청 범위에서만 수행하세요. folder_add/rescan은 비동기 색인이므로 scan_status와 library_search로 완료를 확인하세요. skill_status/skill_get으로 앱에 포함된 스킬을 받고, 같은 기기의 실제 스킬 폴더를 확인한 경우 skill_install로 설치할 수 있습니다. 오류 응답은 완료로 취급하지 마세요.";
 
 pub fn definitions() -> &'static Value {
     static TOOLS: OnceLock<Value> = OnceLock::new();
@@ -15,7 +15,7 @@ pub fn definitions() -> &'static Value {
         let mut tools = Vec::new();
         let mut add = |tool_name: &str, description: &str, properties: Value, required: &[&str], read_only: bool, destructive: bool| {
             tools.push(json!({"name":tool_name,"description":description,"inputSchema":{"type":"object","properties":properties,"required":required,"additionalProperties":false},
-                "annotations":{"readOnlyHint":read_only,"destructiveHint":destructive,"openWorldHint":(["lyrics_search","metadata_search"].contains(&tool_name))}}));
+                "annotations":{"readOnlyHint":read_only,"destructiveHint":destructive,"openWorldHint":(["lyrics_search","metadata_search","album_search","album_preview"].contains(&tool_name))}}));
         };
         add("app_status", "앱 버전, 선택한 워크스페이스, 색인 상태 확인", json!({}), &[], true, false);
         add("workspace_list", "워크스페이스 ID·이름·연결 폴더 및 현재 선택 조회", json!({}), &[], true, false);
@@ -44,6 +44,8 @@ pub fn definitions() -> &'static Value {
         add("playback_speed", "재생 배속 설정 (0.5~2)", json!({"speed":{"type":"number","minimum":0.5,"maximum":2}}), &["speed"], false, false);
         add("lyrics_search", "LRCLIB 가사 후보 검색. 파일에 자동 적용하지 않음", json!({"query":text}), &["query"], true, false);
         add("metadata_search", "MusicBrainz 태그 후보 조회. 파일에 자동 적용하지 않음", json!({"workspaceId":id,"trackId":id,"query":text}), &["workspaceId","trackId"], true, false);
+        add("album_search", "트랙의 앨범명·앨범 아티스트로 MusicBrainz 발매판 후보 검색. query로 검색어 지정 가능", json!({"workspaceId":id,"trackId":id,"query":text}), &["workspaceId","trackId"], true, false);
+        add("album_preview", "선택한 발매판 전체 트랙을 한 번 조회해 지정한 곡들의 제목·재생 시간과 매칭. 파일에 자동 적용하지 않음", json!({"workspaceId":id,"trackIds":ids,"releaseId":{"type":"string","minLength":36,"maxLength":36}}), &["workspaceId","trackIds","releaseId"], true, false);
         add("playlist_list", "워크스페이스의 플레이리스트와 표시 가능한 trackIds 조회", json!({"workspaceId":id}), &["workspaceId"], true, false);
         add("playlist_create", "워크스페이스에 플레이리스트 생성", json!({"workspaceId":id,"name":name}), &["workspaceId","name"], false, false);
         add("playlist_delete", "해당 워크스페이스의 플레이리스트 삭제", json!({"workspaceId":id,"playlistId":id}), &["workspaceId","playlistId"], false, true);
@@ -52,6 +54,7 @@ pub fn definitions() -> &'static Value {
         add("skill_status", "번들 스킬 revision과 선택한 설치 경로의 상태 확인", json!({"skillsDirectory":text}), &[], true, false);
         add("skill_get", "앱에 포함된 스킬·API 안내·현재 도구 스키마를 UTF-8 파일로 조회", json!({"knownRevision":revision}), &[], true, false);
         add("skill_install", "실제 AI 스킬 폴더에 lof-audio 스킬 설치·업데이트. 기존 폴더는 별도로 백업", json!({"skillsDirectory":text,"expectedRevision":revision,"expectedInstalledRevision":revision}), &["skillsDirectory","expectedRevision"], false, true);
+        tools.extend(serde_json::from_str::<Vec<Value>>(include_str!("research_tools.json")).expect("Bundled research schemas are valid JSON"));
         Value::Array(tools)
     })
 }
@@ -76,6 +79,12 @@ pub fn validate(value: &Value, schema: &Value, path: &str) -> Result<(), String>
     };
     if !valid {
         return Err(format!("INVALID_ARGUMENT: {path}의 자료형을 확인하세요."));
+    }
+    if schema["enum"]
+        .as_array()
+        .is_some_and(|allowed| !allowed.contains(value))
+    {
+        return Err(format!("INVALID_ARGUMENT: {path}의 지원 값을 확인하세요."));
     }
     if let Some(fields) = value.as_object() {
         if fields.len() < schema["minProperties"].as_u64().unwrap_or(0) as usize {

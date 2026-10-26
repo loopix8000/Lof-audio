@@ -8,7 +8,6 @@ import { TrackPropertiesDialog } from "./features/track-editor/TrackPropertiesDi
 import { SettingsDialog } from "./features/settings/SettingsDialog";
 import { CoverPreview } from "./features/metadata/CoverPreview";
 import { StatusToast } from "./app/StatusToast";
-import { WorkspaceBar } from "./features/workspaces/WorkspaceBar";
 
 export function App() {
   const app = useAudioApp();
@@ -16,7 +15,6 @@ export function App() {
     <AudioAppContext.Provider value={app}>
       <div className="tauri-app">
         <Titlebar />
-        <WorkspaceBar />
         <LibraryLayout />
         <CompactPlayer />
         <TrackContextMenu />

@@ -1,4 +1,4 @@
-import { ChevronLeft, Edit3, PanelRight, Music, FolderPlus, FilePlus, LayoutGrid, FolderTree } from "lucide-react";
+import { ChevronLeft, Edit3, PanelRight, Music, FolderPlus, FilePlus, Search, LayoutGrid, FolderTree } from "lucide-react";
 import { formatDuration } from "../../utils/lrc";
 import { VirtualTrackTable } from "../../components/TrackRows";
 import { TrackTableHeader } from "./TrackTableHeader";
@@ -35,6 +35,8 @@ export function LibraryBrowser() {
     handleRowContextMenu,
     handleToggleFavorite,
     folders,
+    tracks,
+    openAlbumMatchDialog,
   } = useAudioAppContext();
   return (<div className="main-column">
     <div className="surface-header">
@@ -97,6 +99,11 @@ export function LibraryBrowser() {
               <FolderTree size={14} />
             </button>
           </div>
+        )}
+        {navCategory === "albums" && subFilter !== null && (
+          <button className="ui-btn" onClick={() => openAlbumMatchDialog(tracks.filter(track => track.album === subFilter).map(track => track.id))}>
+            <Search size={13} /> 앨범 정보 조회
+          </button>
         )}
         {selectedIds.length > 0 && (
           <button

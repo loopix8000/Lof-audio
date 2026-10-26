@@ -14,8 +14,8 @@ mod workspaces;
 use audio::AudioEngine;
 use db::Database;
 use models::{
-    ConfirmTrackMatchItem, FilenamePatternInput, LrcLibTrack, MusicBrainzCandidate, PlaybackState,
-    Playlist, TagUpdateInput, Track, TrackMatchPreview, WorkspaceState,
+    AlbumCandidate, AlbumTrackMatch, ConfirmTrackMatchItem, FilenamePatternInput, LrcLibTrack,
+    MusicBrainzCandidate, PlaybackState, Playlist, TagUpdateInput, Track, WorkspaceState,
 };
 use scanner::{ScanProgress, ScanQueue};
 use serde::Serialize;
@@ -320,14 +320,24 @@ async fn preview_match_lyrics(
 ) -> Result<Option<LrcLibTrack>, String> {
     operations::preview_match_lyrics(track_id, candidate, &state).await
 }
+
 #[tauri::command]
-async fn preview_auto_match(
-    track_ids: Vec<i64>,
+async fn search_album_metadata(
+    track_id: i64,
+    custom_query: Option<String>,
     state: State<'_, AppState>,
-) -> Result<Vec<TrackMatchPreview>, String> {
-    operations::preview_auto_match(track_ids, &state).await
+) -> Result<Vec<AlbumCandidate>, String> {
+    operations::search_album_metadata(track_id, custom_query, &state).await
 }
 
+#[tauri::command]
+async fn preview_album_metadata(
+    track_ids: Vec<i64>,
+    release_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<AlbumTrackMatch>, String> {
+    operations::preview_album_metadata(track_ids, release_id, &state).await
+}
 #[tauri::command]
 async fn apply_confirmed_matches(
     items: Vec<ConfirmTrackMatchItem>,
@@ -491,12 +501,13 @@ pub fn run() {
             apply_filename_pattern,
             preview_filename_pattern,
             preview_match_lyrics,
+            search_album_metadata,
+            preview_album_metadata,
             toggle_favorite,
             update_lyric_offset,
             search_lyrics_manual,
             apply_lyrics_to_track,
             search_track_metadata,
-            preview_auto_match,
             apply_confirmed_matches,
             create_playlist,
             delete_playlist,

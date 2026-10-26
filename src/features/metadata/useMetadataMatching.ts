@@ -1,7 +1,8 @@
 import { api } from "../../api";
 import { MusicBrainzCandidate, TrackMatchPreview, ConfirmTrackMatchItem } from "../../types";
 import { mergeTrackChanges } from "../../library";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { lookupMatches } from "./lookupMatches";
 import type { MetadataStateModel } from "./useMetadataState";
 import type { TrackEditorStateModel } from "../track-editor/useTrackEditorState";
 import type { NotificationsModel } from "../../app/useNotifications";
@@ -25,6 +26,8 @@ export function useMetadataMatching({
 }: Inputs) {
   const {
     matchDialogVersion,
+    matchLookupVersion,
+    setMatchError,
     setMatchLoading,
     setMatchPreviews,
     setMatchCheckedMap,
@@ -41,66 +44,142 @@ export function useMetadataMatching({
     applyFieldCover,
     applyFieldLyrics,
   } = metadataState;
-  const { dialogTrackIds, setDialogOpen } = trackEditorState;
+  const { dialogTrackIds, dialogOpen, setDialogOpen } = trackEditorState;
   const { notify } = notifications;
   const { dialogPrimaryTrack, refreshEditedTracks } = trackEditor;
   const { setTracks } = libraryState;
-  const handleLookupAutoMatchPreview = async () => {
+  useEffect(() => {
+    if (!dialogOpen) {
+      matchDialogVersion.current += 1;
+      matchLookupVersion.current += 1;
+      setMatchLoading(false);
+      setLyricsPendingIds(new Set());
+    }
+  }, [dialogOpen]);
+
+  const beginLookup = () => {
+    const version = ++matchLookupVersion.current;
     const dialogVersion = matchDialogVersion.current;
-    if (dialogTrackIds.length === 0) return;
+    matchRequestVersion.current = {};
+    setLyricsPendingIds(new Set());
+    setMatchPreviews([]);
+    setMatchCheckedMap({});
+    setMatchSelectedCandIdx({});
+    setMatchError("");
     setMatchLoading(true);
+    return () => dialogVersion === matchDialogVersion.current && version === matchLookupVersion.current;
+  };
+
+  const loadPreviews = async (isCurrent: () => boolean, searchMetadata: (id: number) => Promise<MusicBrainzCandidate[]>, lyricsForUnmatched = true) => {
+    const order = new Map(dialogTrackIds.map((id, i) => [id, i]));
+    await lookupMatches(dialogTrackIds, {
+      isCurrent,
+      searchMetadata,
+      onPreview: preview => {
+        setMatchPreviews(previous => [...previous, preview].sort((a, b) => order.get(a.trackId)! - order.get(b.trackId)!));
+        setMatchCheckedMap(previous => ({ ...previous, [preview.trackId]: preview.candidates.length > 0 }));
+        setMatchSelectedCandIdx(previous => ({ ...previous, [preview.trackId]: 0 }));
+        if (applyFieldLyrics && (lyricsForUnmatched || preview.candidates.length)) {
+          setLyricsPendingIds(previous => new Set(previous).add(preview.trackId));
+        }
+      },
+      onMetadataComplete: () => setMatchLoading(false),
+      loadLyrics: async preview => {
+        // A user selection takes precedence over a queued automatic lookup.
+        if (applyFieldLyrics && (lyricsForUnmatched || preview.candidates.length) && !matchRequestVersion.current[preview.trackId]) {
+          await handleSelectMatchCandidate(preview.trackId, 0, preview.candidates[0] || null);
+        }
+      },
+    });
+  };
+
+  const handleLookupAutoMatchPreview = async () => {
+    if (dialogTrackIds.length === 0 || metadataState.matchLoading) return;
+    const isCurrent = beginLookup();
     try {
-      const previews = await api.previewAutoMatch(dialogTrackIds);
-      if (dialogVersion !== matchDialogVersion.current) return;
-      setMatchPreviews(previews);
-      const nextChecked: Record<number, boolean> = {};
-      const nextCandIdx: Record<number, number> = {};
-      for (const p of previews) {
-        const hasMatch =
-          p.candidates.length > 0 ||
-          Boolean(p.matchedSyncedLyrics) ||
-          Boolean(p.matchedPlainLyrics);
-        nextChecked[p.trackId] = hasMatch;
-        nextCandIdx[p.trackId] = 0;
-      }
-      setMatchCheckedMap(nextChecked);
-      setMatchSelectedCandIdx(nextCandIdx);
+      await loadPreviews(isCurrent, id => api.searchTrackMetadata(id));
     } catch (err) {
-      notify(`매칭 후보 조회 실패: ${err}`);
+      if (isCurrent()) setMatchError(`매칭 후보 조회 실패: ${err}`);
     } finally {
-      if (dialogVersion === matchDialogVersion.current) setMatchLoading(false);
+      if (isCurrent()) setMatchLoading(false);
+    }
+  };
+
+  const handleSearchAlbum = async () => {
+    if (!dialogPrimaryTrack || metadataState.matchLoading) return;
+    const isCurrent = beginLookup();
+    metadataState.setAlbumCandidates([]);
+    metadataState.setSelectedReleaseId("");
+    try {
+      const albums = await api.searchAlbumMetadata(dialogPrimaryTrack.id, metadataState.albumQuery.trim() || undefined);
+      if (!isCurrent()) return;
+      metadataState.setAlbumCandidates(albums);
+      if (!albums.length) setMatchError("일치하는 앨범을 찾지 못했습니다. 앨범명이나 아티스트를 바꿔 검색해 보세요.");
+    } catch (error) {
+      if (isCurrent()) setMatchError(`앨범 조회 실패: ${error}`);
+    } finally {
+      if (isCurrent()) setMatchLoading(false);
+    }
+  };
+
+  const handleSelectAlbum = async (releaseId: string) => {
+    if (!releaseId || metadataState.matchLoading) return;
+    const isCurrent = beginLookup();
+    metadataState.setSelectedReleaseId(releaseId);
+    try {
+      const matches = await api.previewAlbumMetadata(dialogTrackIds, releaseId);
+      if (!isCurrent()) return;
+      const byTrack = new Map(matches.map(match => [match.trackId, match.candidates]));
+      await loadPreviews(isCurrent, async id => byTrack.get(id) || [], false);
+      if (isCurrent() && !matches.some(match => match.candidates.length)) {
+        setMatchError("선택한 앨범에서 제목과 재생 시간이 일치하는 곡을 찾지 못했습니다.");
+      }
+    } catch (error) {
+      if (isCurrent()) setMatchError(`앨범 곡 조회 실패: ${error}`);
+    } finally {
+      if (isCurrent()) setMatchLoading(false);
     }
   };
 
   const handleSelectMatchCandidate = async (trackId: number, index: number, candidate: MusicBrainzCandidate | null) => {
     const dialogVersion = matchDialogVersion.current;
+    const lookupVersion = matchLookupVersion.current;
     const version = (matchRequestVersion.current[trackId] || 0) + 1;
     matchRequestVersion.current[trackId] = version;
-    setLyricsPendingIds(previous => new Set(previous).add(trackId));
+    const isCurrent = () => dialogVersion === matchDialogVersion.current && lookupVersion === matchLookupVersion.current && version === matchRequestVersion.current[trackId];
     setMatchSelectedCandIdx(previous => ({ ...previous, [trackId]: index }));
-    setMatchPreviews(previous => previous.map(p => p.trackId === trackId ? { ...p, matchedSyncedLyrics: null, matchedPlainLyrics: null } : p));
+    setMatchPreviews(previous => previous.map(p => p.trackId === trackId ? { ...p, matchedSyncedLyrics: null, matchedPlainLyrics: null, lyricsError: undefined } : p));
+    if (!applyFieldLyrics) {
+      setLyricsPendingIds(previous => { const next = new Set(previous); next.delete(trackId); return next; });
+      return;
+    }
+    setLyricsPendingIds(previous => new Set(previous).add(trackId));
     try {
       const lyrics = await api.previewMatchLyrics(trackId, candidate);
-      if (dialogVersion !== matchDialogVersion.current || version !== matchRequestVersion.current[trackId]) return;
+      if (!isCurrent()) return;
       setMatchPreviews(previous => previous.map(p => p.trackId === trackId ? { ...p, matchedSyncedLyrics: lyrics?.syncedLyrics || null, matchedPlainLyrics: lyrics?.plainLyrics || null } : p));
-    } catch (error) { if (dialogVersion === matchDialogVersion.current && version === matchRequestVersion.current[trackId]) notify(`가사 후보 조회 실패: ${error}`); } finally {
-      if (dialogVersion === matchDialogVersion.current && version === matchRequestVersion.current[trackId]) {
+      if (!candidate && (lyrics?.syncedLyrics || lyrics?.plainLyrics)) {
+        setMatchCheckedMap(previous => ({ ...previous, [trackId]: true }));
+      }
+    } catch (error) {
+      if (isCurrent()) setMatchPreviews(previous => previous.map(p => p.trackId === trackId ? { ...p, lyricsError: `가사 후보 조회 실패: ${error}` } : p));
+    } finally {
+      if (isCurrent()) {
         setLyricsPendingIds(previous => { const next = new Set(previous); next.delete(trackId); return next; });
       }
     }
   };
 
   const handleManualMbSearch = async () => {
-    const dialogVersion = matchDialogVersion.current;
     const t = dialogPrimaryTrack;
-    if (!t) return;
-    setMatchLoading(true);
+    if (!t || metadataState.matchLoading) return;
+    const isCurrent = beginLookup();
     try {
       const cands = await api.searchTrackMetadata(
         t.id,
         manualMbQuery.trim() || undefined
       );
-      if (dialogVersion !== matchDialogVersion.current) return;
+      if (!isCurrent()) return;
       setMatchPreviews((prev) => {
         const entry: TrackMatchPreview = {
           trackId: t.id,
@@ -124,9 +203,9 @@ export function useMetadataMatching({
         notify("일치하는 온라인 후보를 찾지 못했습니다.");
       }
     } catch (err) {
-      notify(`검색 오류: ${err}`);
+      if (isCurrent()) setMatchError(`검색 오류: ${err}`);
     } finally {
-      if (dialogVersion === matchDialogVersion.current) setMatchLoading(false);
+      if (isCurrent()) setMatchLoading(false);
     }
   };
 
@@ -179,6 +258,8 @@ export function useMetadataMatching({
   );
 
   return {
+    handleSearchAlbum,
+    handleSelectAlbum,
     handleManualMbSearch,
     handleLookupAutoMatchPreview,
     handleSelectMatchCandidate,

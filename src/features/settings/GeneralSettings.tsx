@@ -1,4 +1,5 @@
 import { useAudioAppContext } from "../../app/AppContext";
+import { Select } from "../../components/Select";
 
 export function GeneralSettings() {
   const {
@@ -19,14 +20,13 @@ export function GeneralSettings() {
             제목 표시줄의 달·해 아이콘으로도 바꿀 수 있습니다.
           </span>
         </div>
-        <select
-          className="form-field settings-control"
+        <Select
+          aria-label="테마"
+          className="settings-control"
           value={theme}
-          onChange={(e) => setTheme(e.target.value as "light" | "dark")}
-        >
-          <option value="light">라이트</option>
-          <option value="dark">다크</option>
-        </select>
+          onChange={value => setTheme(value as "light" | "dark")}
+          options={[{ value: "light", label: "라이트" }, { value: "dark", label: "다크" }]}
+        />
       </div>
       <label className="settings-row">
         <div className="settings-row-text">

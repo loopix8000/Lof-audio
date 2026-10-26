@@ -147,6 +147,22 @@ export interface TrackMatchPreview {
   candidates: MusicBrainzCandidate[];
   matchedSyncedLyrics: string | null;
   matchedPlainLyrics: string | null;
+  metadataError?: string;
+  lyricsError?: string;
+}
+
+export interface AlbumCandidate {
+  releaseId: string;
+  album: string;
+  artist: string;
+  date: string | null;
+  country: string | null;
+  trackCount: number;
+}
+
+export interface AlbumTrackMatch {
+  trackId: number;
+  candidates: MusicBrainzCandidate[];
 }
 
 export interface ConfirmTrackMatchItem {

@@ -1,6 +1,7 @@
 import { RepeatMode } from "../../types";
 import { NP_ART_MAX_RANGE } from "../../settings";
 import { useAudioAppContext } from "../../app/AppContext";
+import { Select } from "../../components/Select";
 
 export function PlaybackSettings() {
   const {
@@ -53,15 +54,17 @@ export function PlaybackSettings() {
         <div className="settings-row-text">
           <span className="settings-row-title">반복</span>
         </div>
-        <select
-          className="form-field settings-control"
+        <Select
+          aria-label="반복"
+          className="settings-control"
           value={repeatMode}
-          onChange={(e) => setRepeatMode(e.target.value as RepeatMode)}
-        >
-          <option value="off">반복 안 함</option>
-          <option value="all">전체 반복</option>
-          <option value="one">한 곡 반복</option>
-        </select>
+          onChange={value => setRepeatMode(value as RepeatMode)}
+          options={[
+            { value: "off", label: "반복 안 함" },
+            { value: "all", label: "전체 반복" },
+            { value: "one", label: "한 곡 반복" },
+          ]}
+        />
       </div>
       <div className="settings-row">
         <div className="settings-row-text">

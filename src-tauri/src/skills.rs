@@ -20,6 +20,10 @@ fn bundle() -> Files {
             include_bytes!("../../skills/lof-audio/references/api.md").to_vec(),
         ),
         (
+            "references/metadata-research.md".into(),
+            include_bytes!("../../skills/lof-audio/references/metadata-research.md").to_vec(),
+        ),
+        (
             "references/tools.json".into(),
             serde_json::to_vec_pretty(crate::automation::tools::definitions()).unwrap(),
         ),

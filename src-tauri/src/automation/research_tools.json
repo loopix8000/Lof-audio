@@ -1,0 +1,516 @@
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "AI의 여러 출처 조사를 위한 최신 태그·revision·동일 곡 식별 정보·검색어·앨범 그룹 조회. 외부 검색은 AI의 웹/다른 MCP 도구로 수행",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "items": {
+            "enum": [
+              "title",
+              "artist",
+              "album",
+              "albumArtist",
+              "year",
+              "trackNumber",
+              "genre"
+            ],
+            "type": "string"
+          },
+          "maxItems": 7,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "trackIds": {
+          "items": {
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 200,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackIds"
+      ],
+      "type": "object"
+    },
+    "name": "metadata_research_prepare"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "AI가 확인한 출처별 관측값과 수정안을 비교. 필드별 출처 충돌·근거 부족을 표시하고 저장 가능한 필드와 planHash 반환. 서버는 출처 본문을 직접 검증하지 않음",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "album": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "albumArtist": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "artist": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "genre": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "title": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            "trackNumber": {
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "year": {
+              "maximum": 9999,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "expectedRevision": {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "accessedAt": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              "claims": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "album": {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  "albumArtist": {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  "artist": {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  "genre": {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "trackNumber": {
+                    "maximum": 65535,
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "year": {
+                    "maximum": 9999,
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "identityNote": {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "identityVerified": {
+                "type": "boolean"
+              },
+              "independenceKey": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "note": {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "publisher": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "sourceId": {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              "sourceKind": {
+                "enum": [
+                  "official",
+                  "catalog",
+                  "store",
+                  "streaming",
+                  "reference",
+                  "other"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              "url": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "sourceId",
+              "url",
+              "title",
+              "publisher",
+              "independenceKey",
+              "sourceKind",
+              "identityVerified",
+              "identityNote",
+              "claims"
+            ],
+            "type": "object"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array"
+        },
+        "trackId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackId",
+        "expectedRevision",
+        "changes",
+        "sources"
+      ],
+      "type": "object"
+    },
+    "name": "metadata_research_preview"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "미리보기 hash·최신 revision을 확인하고 독립 출처 2개 이상이 일치하며 충돌 없는 선택 필드만 저장. 출처·전후 값·결과를 DB 이력에 기록",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "album": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "albumArtist": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "artist": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "genre": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "title": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            "trackNumber": {
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "year": {
+              "maximum": 9999,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "expectedPlanHash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        },
+        "expectedRevision": {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        },
+        "selectedFields": {
+          "items": {
+            "enum": [
+              "title",
+              "artist",
+              "album",
+              "albumArtist",
+              "year",
+              "trackNumber",
+              "genre"
+            ],
+            "type": "string"
+          },
+          "maxItems": 7,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "sources": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "accessedAt": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              "claims": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "album": {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  "albumArtist": {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  "artist": {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  "genre": {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "trackNumber": {
+                    "maximum": 65535,
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "year": {
+                    "maximum": 9999,
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "identityNote": {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "identityVerified": {
+                "type": "boolean"
+              },
+              "independenceKey": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "note": {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "publisher": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "sourceId": {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              "sourceKind": {
+                "enum": [
+                  "official",
+                  "catalog",
+                  "store",
+                  "streaming",
+                  "reference",
+                  "other"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              "url": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "sourceId",
+              "url",
+              "title",
+              "publisher",
+              "independenceKey",
+              "sourceKind",
+              "identityVerified",
+              "identityNote",
+              "claims"
+            ],
+            "type": "object"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array"
+        },
+        "trackId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackId",
+        "expectedRevision",
+        "changes",
+        "sources",
+        "expectedPlanHash",
+        "selectedFields"
+      ],
+      "type": "object"
+    },
+    "name": "metadata_research_apply"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "지정한 워크스페이스와 곡의 AI 메타정보 수정 근거·전후 값·저장 결과 이력 조회",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "trackId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackId"
+      ],
+      "type": "object"
+    },
+    "name": "metadata_research_history"
+  }
+]

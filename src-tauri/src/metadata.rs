@@ -37,6 +37,33 @@ pub fn edit_track_checked(
     save_lrc: bool,
     edit: impl FnOnce(&mut Track) -> Result<(), String>,
 ) -> Result<Track, String> {
+    edit_checked((db, lock), id, expected_revision, save_lrc, edit, |_| {
+        db.get_public_track(id)
+    })
+}
+
+pub fn edit_track_checked_with_revision(
+    db: &Database,
+    lock: &Mutex<()>,
+    id: i64,
+    expected_revision: Option<&str>,
+    save_lrc: bool,
+    edit: impl FnOnce(&mut Track) -> Result<(), String>,
+) -> Result<(Track, String), String> {
+    edit_checked((db, lock), id, expected_revision, save_lrc, edit, |track| {
+        Ok((db.get_public_track(id)?, revision(track)))
+    })
+}
+
+fn edit_checked<T>(
+    store: (&Database, &Mutex<()>),
+    id: i64,
+    expected_revision: Option<&str>,
+    save_lrc: bool,
+    edit: impl FnOnce(&mut Track) -> Result<(), String>,
+    after: impl FnOnce(&Track) -> Result<T, String>,
+) -> Result<T, String> {
+    let (db, lock) = store;
     let _guard = lock.lock().map_err(|e| e.to_string())?;
     let mut track = db
         .get_track_by_id(id)?
@@ -47,7 +74,7 @@ pub fn edit_track_checked(
     edit(&mut track)?;
     tags::write_track(&track, save_lrc)?;
     db.update_track_metadata(&track)?;
-    db.get_public_track(id)
+    after(&track)
 }
 
 #[cfg(test)]

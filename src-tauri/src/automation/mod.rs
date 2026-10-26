@@ -1,5 +1,6 @@
 pub mod dispatch;
 mod http;
+mod research;
 pub mod stdio;
 #[cfg(test)]
 mod tests;
@@ -24,7 +25,9 @@ pub fn handler(app: tauri::AppHandle) -> Handler {
             let result = dispatch::call(&state, &name, &args).await?;
             if name.starts_with("playback_") && name != "playback_status" {
                 let _ = app.emit("automation-playback", json!({"action":name,"playback":result,"workspaceState":state.db.get_workspace_state()?}));
-            } else if ["track_update", "track_favorite"].contains(&name.as_str()) {
+            } else if ["track_update", "track_favorite", "metadata_research_apply"]
+                .contains(&name.as_str())
+            {
                 let _ = app.emit("library-changed", vec![args["trackId"].as_i64().unwrap()]);
             } else if tools::definitions()
                 .as_array()

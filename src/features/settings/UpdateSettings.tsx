@@ -1,6 +1,7 @@
 import { UpdateChannel } from "../../settings";
 import { RefreshCw, Download } from "lucide-react";
 import { useAudioAppContext } from "../../app/AppContext";
+import { Select } from "../../components/Select";
 
 export function UpdateSettings() {
   const {
@@ -32,15 +33,14 @@ export function UpdateSettings() {
             베타는 정식 버전과 시험 버전 중 가장 최신 버전을 받습니다. 채널을 바꿔도 이전 버전으로 내려가지 않습니다.
           </span>
         </div>
-        <select
-          className="form-field settings-control"
+        <Select
+          aria-label="업데이트 채널"
+          className="settings-control"
           value={updateChannel}
           disabled={updater.phase === "downloading" || updater.phase === "installing"}
-          onChange={(e) => setUpdateChannel(e.target.value as UpdateChannel)}
-        >
-          <option value="stable">정식</option>
-          <option value="beta">베타</option>
-        </select>
+          onChange={value => setUpdateChannel(value as UpdateChannel)}
+          options={[{ value: "stable", label: "정식" }, { value: "beta", label: "베타" }]}
+        />
       </div>
       <label className="settings-row">
         <div className="settings-row-text">

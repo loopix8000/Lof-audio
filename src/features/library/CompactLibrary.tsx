@@ -3,6 +3,7 @@ import { VirtualTrackList } from "../../components/TrackRows";
 import { formatDuration } from "../../utils/lrc";
 import { CollectionBrowser } from "./CollectionBrowser";
 import { useAudioAppContext } from "../../app/AppContext";
+import { WorkspaceBar } from "../workspaces/WorkspaceBar";
 
 export function CompactLibrary() {
   const {
@@ -112,6 +113,8 @@ export function CompactLibrary() {
     ) : (
       <VirtualTrackList tracks={displayedTracks} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={handleRowClick} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} />
     )}
+
+    {showPlayerBrowser && <WorkspaceBar />}
 
     <div className="pm-pl-footer">
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>

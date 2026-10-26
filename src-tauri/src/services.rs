@@ -3,8 +3,25 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use reqwest::{Client, Response, StatusCode};
 use serde_json::Value;
-use std::sync::OnceLock;
-use std::time::Duration;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+mod albums;
+mod cache;
+pub use albums::{album_matches, fetch_album_tracks, search_albums};
+use cache::RequestCache;
+
+fn normalized(text: &str) -> String {
+    text.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn has_lyrics(track: &LrcLibTrack) -> bool {
+    [&track.synced_lyrics, &track.plain_lyrics]
+        .iter()
+        .any(|lyrics| lyrics.as_ref().is_some_and(|text| !text.trim().is_empty()))
+}
 
 fn build_http_client() -> Result<Client, String> {
     if rustls::crypto::CryptoProvider::get_default().is_none() {
@@ -14,9 +31,11 @@ fn build_http_client() -> Result<Client, String> {
     CLIENT
         .get_or_init(|| {
             Client::builder()
-                .user_agent(
-                    "LofAudio/0.1.0 (https://github.com/lof-audio; contact@lof-audio.local)",
-                )
+                .user_agent(concat!(
+                    "LofAudio/",
+                    env!("CARGO_PKG_VERSION"),
+                    " (https://github.com/loopix8000/Lof-audio)"
+                ))
                 .timeout(Duration::from_secs(12))
                 .build()
                 .map_err(|e| format!("HTTP 클라이언트 생성 실패: {}", e))
@@ -60,46 +79,135 @@ pub async fn fetch_lrclib_auto(
     album_name: &str,
     duration_secs: f64,
 ) -> Result<Option<LrcLibTrack>, String> {
+    static CACHE: OnceLock<RequestCache<Option<LrcLibTrack>>> = OnceLock::new();
+    let key = serde_json::to_string(&(
+        track_name.trim(),
+        artist_name.trim(),
+        album_name.trim(),
+        duration_secs.round(),
+    ))
+    .map_err(|e| e.to_string())?;
+    tokio::time::timeout(
+        Duration::from_secs(20),
+        CACHE
+            .get_or_init(|| RequestCache::new(128, Duration::from_secs(300)))
+            .get_or_fetch(key, || {
+                fetch_lrclib_auto_inner(track_name, artist_name, album_name, duration_secs)
+            }),
+    )
+    .await
+    .map_err(|_| {
+        "LRCLIB 가사 조회 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.".to_string()
+    })?
+}
+
+async fn fetch_lrclib_auto_inner(
+    track_name: &str,
+    artist_name: &str,
+    album_name: &str,
+    duration_secs: f64,
+) -> Result<Option<LrcLibTrack>, String> {
     let client = build_http_client()?;
 
-    // 1. Try exact /api/get first if we have track_name and artist_name
-    if !track_name.trim().is_empty()
-        && !artist_name.trim().is_empty()
-        && artist_name != "Unknown Artist"
-    {
-        let mut params = vec![
-            ("track_name", track_name.trim().to_string()),
-            ("artist_name", artist_name.trim().to_string()),
-        ];
-        if !album_name.trim().is_empty() && album_name != "Unknown Album" {
-            params.push(("album_name", album_name.trim().to_string()));
-        }
-        if duration_secs > 1.0 {
-            params.push(("duration", format!("{:.0}", duration_secs)));
-        }
+    let exact = async {
+        if !track_name.trim().is_empty()
+            && !artist_name.trim().is_empty()
+            && artist_name != "Unknown Artist"
+        {
+            let mut params = vec![
+                ("track_name", track_name.trim().to_string()),
+                ("artist_name", artist_name.trim().to_string()),
+            ];
+            if !album_name.trim().is_empty() && album_name != "Unknown Album" {
+                params.push(("album_name", album_name.trim().to_string()));
+            }
+            if duration_secs > 1.0 {
+                params.push(("duration", format!("{:.0}", duration_secs)));
+            }
 
-        if let Ok(resp) = lrclib_get(&client, "https://lrclib.net/api/get", &params).await {
-            if resp.status().is_success() {
-                if let Ok(item) = resp.json::<LrcLibTrack>().await {
-                    if item.synced_lyrics.is_some() || item.plain_lyrics.is_some() {
-                        return Ok(Some(item));
+            if let Ok(resp) = lrclib_get(&client, "https://lrclib.net/api/get", &params).await {
+                if resp.status().is_success() {
+                    if let Ok(item) = resp.json::<LrcLibTrack>().await {
+                        if has_lyrics(&item) {
+                            return Ok(Some(item));
+                        }
                     }
                 }
             }
         }
-    }
+        Ok(None)
+    };
 
-    // 2. Fallback to /api/search
     let query = if artist_name != "Unknown Artist" && !artist_name.trim().is_empty() {
         format!("{} {}", artist_name.trim(), track_name.trim())
     } else {
         track_name.trim().to_string()
     };
 
-    let results = search_lrclib(&query).await?;
+    let search = async {
+        // Let a fast exact match finish without sending a second request.
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let results = search_lrclib(&query).await?;
+        Ok(select_lyrics(
+            results,
+            track_name,
+            artist_name,
+            duration_secs,
+        ))
+    };
+    first_lyrics(exact, search).await
+}
+
+async fn first_lyrics<A, B>(exact: A, search: B) -> Result<Option<LrcLibTrack>, String>
+where
+    A: std::future::Future<Output = Result<Option<LrcLibTrack>, String>>,
+    B: std::future::Future<Output = Result<Option<LrcLibTrack>, String>>,
+{
+    tokio::pin!(exact, search);
+    let (first, second) = tokio::select! {
+        result = &mut exact => {
+            if matches!(result, Ok(Some(_))) { return result; }
+            (result, search.await)
+        },
+        result = &mut search => {
+            if matches!(result, Ok(Some(_))) { return result; }
+            (result, exact.await)
+        }
+    };
+    match first {
+        Ok(Some(item)) => Ok(Some(item)),
+        _ => match second {
+            Ok(Some(item)) => Ok(Some(item)),
+            Err(error) => Err(error),
+            Ok(None) => first,
+        },
+    }
+}
+
+fn select_lyrics(
+    results: Vec<LrcLibTrack>,
+    title: &str,
+    artist: &str,
+    duration_secs: f64,
+) -> Option<LrcLibTrack> {
     let matching: Vec<LrcLibTrack> = results
         .into_iter()
         .filter(|r| {
+            if !has_lyrics(r)
+                || r.track_name
+                    .as_deref()
+                    .is_none_or(|name| normalized(name) != normalized(title))
+            {
+                return false;
+            }
+            if !artist.trim().is_empty()
+                && artist != "Unknown Artist"
+                && r.artist_name
+                    .as_deref()
+                    .is_none_or(|name| normalized(name) != normalized(artist))
+            {
+                return false;
+            }
             if duration_secs > 5.0 {
                 if let Some(d) = r.duration {
                     if (d - duration_secs).abs() > 8.0 {
@@ -118,13 +226,21 @@ pub async fn fetch_lrclib_auto(
             .map(|s| !s.trim().is_empty())
             .unwrap_or(false)
     }) {
-        return Ok(Some(best_synced.clone()));
+        return Some(best_synced.clone());
     }
 
-    Ok(matching.into_iter().next())
+    matching.into_iter().next()
 }
 
 pub async fn search_lrclib(query: &str) -> Result<Vec<LrcLibTrack>, String> {
+    static CACHE: OnceLock<RequestCache<Vec<LrcLibTrack>>> = OnceLock::new();
+    CACHE
+        .get_or_init(|| RequestCache::new(128, Duration::from_secs(300)))
+        .get_or_fetch(query.trim().to_string(), || search_lrclib_uncached(query))
+        .await
+}
+
+async fn search_lrclib_uncached(query: &str) -> Result<Vec<LrcLibTrack>, String> {
     let client = build_http_client()?;
     let resp = lrclib_get(
         &client,
@@ -151,13 +267,27 @@ pub async fn search_lrclib(query: &str) -> Result<Vec<LrcLibTrack>, String> {
     Ok(items)
 }
 
+async fn wait_for_musicbrainz_slot() -> Result<(), String> {
+    // MusicBrainz permits one request per second per client, including MCP searches.
+    static NEXT_REQUEST: OnceLock<Mutex<Instant>> = OnceLock::new();
+    let slot = {
+        let mut next = NEXT_REQUEST
+            .get_or_init(|| Mutex::new(Instant::now()))
+            .lock()
+            .map_err(|e| e.to_string())?;
+        let slot = (*next).max(Instant::now());
+        *next = slot + Duration::from_millis(1100);
+        slot
+    };
+    tokio::time::sleep_until(slot.into()).await;
+    Ok(())
+}
+
 pub async fn search_musicbrainz(
     title: &str,
     artist: &str,
     query_override: Option<String>,
 ) -> Result<Vec<MusicBrainzCandidate>, String> {
-    let client = build_http_client()?;
-
     let lucene_query = if let Some(q) = query_override.filter(|s| !s.trim().is_empty()) {
         q
     } else if !artist.trim().is_empty() && artist != "Unknown Artist" {
@@ -170,26 +300,46 @@ pub async fn search_musicbrainz(
         format!("recording:\"{}\"", title.replace('"', ""))
     };
 
-    let resp = client
-        .get("https://musicbrainz.org/ws/2/recording")
-        .query(&[
+    let json = musicbrainz_json(
+        "recording",
+        &[
             ("query", lucene_query.as_str()),
             ("fmt", "json"),
             ("limit", "12"),
-        ])
-        .send()
+        ],
+    )
+    .await?;
+
+    Ok(parse_recordings(&json, title, artist))
+}
+
+async fn musicbrainz_json(endpoint: &str, params: &[(&str, &str)]) -> Result<Value, String> {
+    static CACHE: OnceLock<RequestCache<Value>> = OnceLock::new();
+    let key = serde_json::to_string(&(endpoint, params)).map_err(|e| e.to_string())?;
+    CACHE
+        .get_or_init(|| RequestCache::new(64, Duration::from_secs(600)))
+        .get_or_fetch(key, || async {
+            let client = build_http_client()?;
+            wait_for_musicbrainz_slot().await?;
+            let resp = client
+                .get(format!("https://musicbrainz.org/ws/2/{endpoint}"))
+                .query(params)
+                .send()
+                .await
+                .map_err(|e| format!("MusicBrainz 검색 실패: {}", e))?;
+
+            if !resp.status().is_success() {
+                return Err(format!("MusicBrainz HTTP 오류: {}", resp.status()));
+            }
+
+            resp.json()
+                .await
+                .map_err(|e| format!("MusicBrainz JSON 파싱 실패: {}", e))
+        })
         .await
-        .map_err(|e| format!("MusicBrainz 검색 실패: {}", e))?;
+}
 
-    if !resp.status().is_success() {
-        return Err(format!("MusicBrainz HTTP 오류: {}", resp.status()));
-    }
-
-    let json: Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("MusicBrainz JSON 파싱 실패: {}", e))?;
-
+fn parse_recordings(json: &Value, title: &str, artist: &str) -> Vec<MusicBrainzCandidate> {
     let mut candidates = Vec::new();
     if let Some(recordings) = json.get("recordings").and_then(|v| v.as_array()) {
         for rec in recordings {
@@ -284,10 +434,20 @@ pub async fn search_musicbrainz(
         }
     }
 
-    Ok(candidates)
+    candidates
 }
 
 pub async fn fetch_cover_art_by_mbid(release_mbid: &str) -> Result<String, String> {
+    static CACHE: OnceLock<RequestCache<String>> = OnceLock::new();
+    CACHE
+        .get_or_init(|| RequestCache::new(8, Duration::from_secs(1800)))
+        .get_or_fetch(release_mbid.trim().to_string(), || {
+            fetch_cover_art_uncached(release_mbid)
+        })
+        .await
+}
+
+async fn fetch_cover_art_uncached(release_mbid: &str) -> Result<String, String> {
     let client = build_http_client()?;
     let urls = [
         format!(
@@ -326,6 +486,53 @@ pub async fn fetch_cover_art_by_mbid(release_mbid: &str) -> Result<String, Strin
 mod tests {
     use super::*;
 
+    fn lyric(id: i64, artist: &str) -> LrcLibTrack {
+        serde_json::from_value(serde_json::json!({"id":id,"name":null,"trackName":"Song","artistName":artist,"albumName":"Album","duration":120,"instrumental":false,"syncedLyrics":"[00:01]Lyrics","plainLyrics":"Lyrics"})).unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_valid_lyric_response_does_not_wait_for_the_other_endpoint() {
+        let pending = || std::future::pending::<Result<Option<LrcLibTrack>, String>>();
+        let first = tokio::time::timeout(
+            Duration::from_millis(100),
+            first_lyrics(async { Ok(Some(lyric(1, "Artist"))) }, pending()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let second = tokio::time::timeout(
+            Duration::from_millis(100),
+            first_lyrics(pending(), async { Ok(Some(lyric(2, "Artist"))) }),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(first.unwrap().id, 1);
+        assert_eq!(second.unwrap().id, 2);
+        let fallback = first_lyrics(async { Err("unavailable".into()) }, async {
+            tokio::task::yield_now().await;
+            Ok(Some(lyric(3, "Artist")))
+        })
+        .await
+        .unwrap();
+        assert_eq!(fallback.unwrap().id, 3);
+    }
+
+    #[test]
+    fn a_fast_search_must_not_select_another_artists_lyrics() {
+        let result = select_lyrics(
+            vec![lyric(1, "Other Artist"), lyric(2, "Artist")],
+            "Song",
+            "Artist",
+            120.0,
+        );
+        assert_eq!(result.unwrap().id, 2);
+        assert!(
+            select_lyrics(vec![lyric(1, "Artist")], "Different Song", "Artist", 120.0).is_none()
+        );
+        assert!(select_lyrics(vec![lyric(1, "Artist")], "Song", "Artist", 320.0).is_none());
+    }
+
     #[test]
     fn shared_client_initializes_tls_without_an_update_check() {
         assert!(build_http_client().is_ok());
@@ -340,5 +547,26 @@ mod tests {
             let items = search_lrclib("tayori 風のたより").await.unwrap();
             assert!(!items.is_empty());
         }
+    }
+
+    // Read-only live probe using the public album used for manual verification.
+    #[tokio::test]
+    #[ignore]
+    async fn live_album_cache_probe() {
+        let start = Instant::now();
+        let albums = search_albums("memento", "tayori", None).await.unwrap();
+        let search_ms = start.elapsed().as_millis();
+        assert!(!albums.is_empty());
+        let start = Instant::now();
+        let tracks = fetch_album_tracks(&albums[0].release_id).await.unwrap();
+        let detail_ms = start.elapsed().as_millis();
+        assert!(!tracks.is_empty());
+        let start = Instant::now();
+        let again = search_albums("memento", "tayori", None).await.unwrap();
+        let cached = fetch_album_tracks(&albums[0].release_id).await.unwrap();
+        let cached_us = start.elapsed().as_micros();
+        assert_eq!(again.len(), albums.len());
+        assert_eq!(cached.len(), tracks.len());
+        println!("album search={search_ms}ms, full track list={detail_ms}ms, repeated search+list={cached_us}us, tracks={}", tracks.len());
     }
 }

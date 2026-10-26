@@ -1,5 +1,6 @@
 import { LYRIC_OFFSET_STEPS, formatOffsetStep } from "../../settings";
 import { useAudioAppContext } from "../../app/AppContext";
+import { Select } from "../../components/Select";
 
 export function LyricsSettings() {
   const {
@@ -69,17 +70,13 @@ export function LyricsSettings() {
             가사 패널의 -/+ 버튼을 한 번 누를 때 움직이는 시간입니다.
           </span>
         </div>
-        <select
-          className="form-field settings-control"
+        <Select
+          aria-label="가사 싱크 조정 단위"
+          className="settings-control"
           value={lyricOffsetStepMs}
-          onChange={(e) => setLyricOffsetStepMs(Number(e.target.value))}
-        >
-          {LYRIC_OFFSET_STEPS.map((ms) => (
-            <option key={ms} value={ms}>
-              {formatOffsetStep(ms)}
-            </option>
-          ))}
-        </select>
+          onChange={setLyricOffsetStepMs}
+          options={LYRIC_OFFSET_STEPS.map(ms => ({ value: ms, label: formatOffsetStep(ms) }))}
+        />
       </div>
     </>
   ));

@@ -147,6 +147,17 @@ fn http_rpc_and_mcp_share_scoped_tools_and_revision_checked_file_writes() {
     assert_eq!(
         rpc(
             &server,
+            "album_search",
+            json!({"workspaceId":second,"trackId":id})
+        )
+        .0,
+        400
+    );
+    assert_eq!(rpc(&server, "album_preview", json!({"workspaceId":second,"trackIds":[id],"releaseId":"22b48d61-1822-47fc-980c-fd597424c28a"})).0, 400);
+    assert_eq!(rpc(&server, "album_preview", json!({"workspaceId":1,"trackIds":[id],"releaseId":"...................................."})).0, 400);
+    assert_eq!(
+        rpc(
+            &server,
             "playlist_create",
             json!({"workspaceId":1,"name":"Mix"})
         )

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
 
+mod research;
 mod workspaces;
 
 /// Size and modification time (ms since epoch) of an audio file when it was indexed.
@@ -181,6 +182,21 @@ impl Database {
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS metadata_research_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL,
+                track_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                status TEXT NOT NULL,
+                proposal_json TEXT NOT NULL,
+                selected_fields_json TEXT NOT NULL,
+                plan_hash TEXT NOT NULL,
+                revision_before TEXT NOT NULL,
+                revision_after TEXT,
+                error TEXT
+            );
+            CREATE INDEX IF NOT EXISTS metadata_research_track ON metadata_research_log(workspace_id, track_id, id);
 
             CREATE TABLE IF NOT EXISTS playlist_tracks (
                 playlist_id INTEGER NOT NULL,
@@ -646,7 +662,11 @@ impl Database {
 
     pub fn set_favorite(&self, track_id: i64, favorite: bool) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute("UPDATE tracks SET is_favorite = ?1 WHERE id = ?2", params![favorite, track_id]).map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE tracks SET is_favorite = ?1 WHERE id = ?2",
+            params![favorite, track_id],
+        )
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 

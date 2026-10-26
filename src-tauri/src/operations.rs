@@ -360,27 +360,34 @@ pub(crate) async fn preview_match_lyrics(
     }
 }
 
-pub(crate) async fn preview_auto_match(
-    track_ids: Vec<i64>,
+pub(crate) async fn search_album_metadata(
+    track_id: i64,
+    custom_query: Option<String>,
     state: &AppState,
-) -> Result<Vec<TrackMatchPreview>, String> {
-    let mut results = Vec::new();
-    for id in track_ids {
-        let track = require_track(state, id)?;
-        let candidates = services::search_musicbrainz(&track.title, &track.artist, None).await?;
-        let (title, artist, album) = candidates
-            .first()
-            .map(|c| (c.title.as_str(), c.artist.as_str(), c.album.as_str()))
-            .unwrap_or((&track.title, &track.artist, &track.album));
-        let lyrics = services::fetch_lrclib_auto(title, artist, album, track.duration_secs).await?;
-        results.push(TrackMatchPreview {
-            track_id: id,
-            candidates,
-            matched_synced_lyrics: lyrics.as_ref().and_then(|l| l.synced_lyrics.clone()),
-            matched_plain_lyrics: lyrics.and_then(|l| l.plain_lyrics),
-        });
+) -> Result<Vec<AlbumCandidate>, String> {
+    let track = require_track(state, track_id)?;
+    let artist = if track.album_artist.is_empty() || track.album_artist == "Unknown Artist" {
+        &track.artist
+    } else {
+        &track.album_artist
+    };
+    services::search_albums(&track.album, artist, custom_query).await
+}
+
+pub(crate) async fn preview_album_metadata(
+    track_ids: Vec<i64>,
+    release_id: String,
+    state: &AppState,
+) -> Result<Vec<AlbumTrackMatch>, String> {
+    if track_ids.is_empty() || track_ids.len() > 200 {
+        return Err("INVALID_ARGUMENT: 한 번에 1~200곡을 조회할 수 있습니다.".into());
     }
-    Ok(results)
+    let tracks = track_ids
+        .into_iter()
+        .map(|id| require_track(state, id))
+        .collect::<Result<Vec<_>, _>>()?;
+    let recordings = services::fetch_album_tracks(&release_id).await?;
+    Ok(services::album_matches(&tracks, &recordings))
 }
 
 pub(crate) async fn apply_confirmed_matches(

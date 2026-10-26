@@ -1,5 +1,6 @@
 import { Search, Music, Heart, Mic2, Disc, FolderPlus, Plus, ListMusic, Trash2, RefreshCw, FilePlus } from "lucide-react";
 import { useAudioAppContext } from "../../app/AppContext";
+import { WorkspaceBar } from "../workspaces/WorkspaceBar";
 
 export function LibrarySidebar() {
   const {
@@ -32,6 +33,7 @@ export function LibrarySidebar() {
   } = useAudioAppContext();
   return (showLeftSidebar && (
     <aside className="app-sidebar">
+      <div className="sidebar-scroll">
       {/* Search Box inside Sidebar */}
       <div className="sidebar-search-wrap">
         <Search size={13} className="sidebar-search-icon" />
@@ -266,22 +268,17 @@ export function LibrarySidebar() {
         </div>
       )}
 
-      {/* Bottom Sidebar Action Buttons */}
-      <div
-        style={{
-          marginTop: "auto",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 6,
-          paddingTop: 8,
-        }}
-      >
-        <button className="ui-btn" onClick={handleAddFolder}>
-          <FolderPlus size={13} /> 폴더 추가
-        </button>
-        <button className="ui-btn" onClick={handleAddFiles}>
-          <FilePlus size={13} /> 파일 열기
-        </button>
+      </div>
+      <div className="sidebar-footer">
+        <WorkspaceBar />
+        <div className="sidebar-file-actions">
+          <button className="ui-btn" onClick={handleAddFolder}>
+            <FolderPlus size={13} /> 폴더 추가
+          </button>
+          <button className="ui-btn" onClick={handleAddFiles}>
+            <FilePlus size={13} /> 파일 열기
+          </button>
+        </div>
       </div>
     </aside>
   ));

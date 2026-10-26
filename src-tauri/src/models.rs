@@ -97,6 +97,24 @@ pub struct MusicBrainzCandidate {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AlbumCandidate {
+    pub release_id: String,
+    pub album: String,
+    pub artist: String,
+    pub date: Option<String>,
+    pub country: Option<String>,
+    pub track_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumTrackMatch {
+    pub track_id: i64,
+    pub candidates: Vec<MusicBrainzCandidate>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Playlist {
     pub id: i64,
     pub name: String,
@@ -119,15 +137,6 @@ pub struct WorkspaceState {
     pub workspaces: Vec<Workspace>,
     pub active_workspace_id: i64,
     pub workspace_revision: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TrackMatchPreview {
-    pub track_id: i64,
-    pub candidates: Vec<MusicBrainzCandidate>,
-    pub matched_synced_lyrics: Option<String>,
-    pub matched_plain_lyrics: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -45,7 +45,7 @@ fn workspace(state: &AppState, id: i64) -> Result<Workspace, String> {
         .ok_or_else(|| "NOT_FOUND: 워크스페이스를 찾을 수 없습니다.".into())
 }
 
-fn require_track(state: &AppState, workspace_id: i64, id: i64) -> Result<Track, String> {
+pub(super) fn require_track(state: &AppState, workspace_id: i64, id: i64) -> Result<Track, String> {
     let ws = workspace(state, workspace_id)?;
     let track = state.db.get_public_track(id)?;
     if !contains(&ws, &track) {
@@ -115,40 +115,46 @@ fn track_update(state: &AppState, args: &Value) -> Result<Value, String> {
             .unwrap_or_else(|| state.db.get_setting_bool("saveLrcFile", true)),
         |track| {
             require_track(state, args["workspaceId"].as_i64().unwrap(), id)?;
-            let changes = args["changes"].as_object().unwrap();
-            if let Some(cover) = changes.get("coverDataUrl").and_then(Value::as_str) {
-                let (mime, _) = crate::tags::decode_data_url(cover)
-                    .ok_or("INVALID_ARGUMENT: coverDataUrl은 이미지 data URL이어야 합니다.")?;
-                if ![
-                    "image/jpeg",
-                    "image/jpg",
-                    "image/png",
-                    "image/gif",
-                    "image/webp",
-                    "image/bmp",
-                    "image/tiff",
-                ]
-                .contains(&mime.as_str())
-                {
-                    return Err("INVALID_ARGUMENT: 지원하지 않는 이미지 형식입니다.".into());
-                }
-            }
-            let mut value = serde_json::to_value(&*track).map_err(|e| e.to_string())?;
-            for (key, value_to_set) in changes {
-                value[key] = value_to_set.clone();
-            }
-            *track = serde_json::from_value(value).map_err(|e| e.to_string())?;
-            if changes.contains_key("syncedLyrics") && !changes.contains_key("plainLyrics") {
-                if let Some(lrc) = &track.synced_lyrics {
-                    track.plain_lyrics = Some(crate::tags::strip_lrc_timestamps(lrc));
-                }
-            } else if changes.contains_key("plainLyrics") && !changes.contains_key("syncedLyrics") {
-                track.synced_lyrics = None;
-            }
-            Ok(())
+            apply_track_changes(track, args["changes"].as_object().unwrap())
         },
     )?;
     track_read(state, args["workspaceId"].as_i64().unwrap(), id, false)
+}
+
+pub(super) fn apply_track_changes(
+    track: &mut Track,
+    changes: &serde_json::Map<String, Value>,
+) -> Result<(), String> {
+    if let Some(cover) = changes.get("coverDataUrl").and_then(Value::as_str) {
+        let (mime, _) = crate::tags::decode_data_url(cover)
+            .ok_or("INVALID_ARGUMENT: coverDataUrl은 이미지 data URL이어야 합니다.")?;
+        if ![
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "image/bmp",
+            "image/tiff",
+        ]
+        .contains(&mime.as_str())
+        {
+            return Err("INVALID_ARGUMENT: 지원하지 않는 이미지 형식입니다.".into());
+        }
+    }
+    let mut value = serde_json::to_value(&*track).map_err(|e| e.to_string())?;
+    for (key, value_to_set) in changes {
+        value[key] = value_to_set.clone();
+    }
+    *track = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    if changes.contains_key("syncedLyrics") && !changes.contains_key("plainLyrics") {
+        if let Some(lrc) = &track.synced_lyrics {
+            track.plain_lyrics = Some(crate::tags::strip_lrc_timestamps(lrc));
+        }
+    } else if changes.contains_key("plainLyrics") && !changes.contains_key("syncedLyrics") {
+        track.synced_lyrics = None;
+    }
+    Ok(())
 }
 
 pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, String> {
@@ -247,6 +253,10 @@ pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, S
             args["includeCover"].as_bool().unwrap_or(false),
         )?,
         "track_update" => track_update(state, args)?,
+        "metadata_research_prepare" => super::research::prepare(state, args)?,
+        "metadata_research_preview" => super::research::preview(state, args)?,
+        "metadata_research_apply" => super::research::apply(state, args)?,
+        "metadata_research_history" => super::research::history(state, args)?,
         "track_remove" => {
             let ids = ids();
             for id in &ids {
@@ -286,6 +296,17 @@ pub async fn call(state: &AppState, tool: &str, args: &Value) -> Result<Value, S
         "metadata_search" => {
             require_track(state, ws, id)?;
             json!({"candidates":operations::search_track_metadata(id, args["query"].as_str().map(String::from), state).await?})
+        }
+        "album_search" => {
+            require_track(state, ws, id)?;
+            json!({"candidates":operations::search_album_metadata(id, args["query"].as_str().map(String::from), state).await?})
+        }
+        "album_preview" => {
+            let ids = ids();
+            for id in &ids {
+                require_track(state, ws, *id)?;
+            }
+            json!({"matches":operations::preview_album_metadata(ids, string("releaseId"), state).await?})
         }
         "playlist_list" => playlists(state, ws)?,
         "playlist_create" => {

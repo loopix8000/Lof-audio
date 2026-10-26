@@ -67,6 +67,12 @@ export function useTrackEditor({
     setMatchPreviews,
     setMatchCheckedMap,
     setMatchSelectedCandIdx,
+    setMatchLoading,
+    setMatchError,
+    setMatchMode,
+    setAlbumQuery,
+    setAlbumCandidates,
+    setSelectedReleaseId,
   } = metadataState;
   const { setLyricsEntries, setLyricsEditingTrackId, lyricsSessionVersion, lyricsBusy, setLrcLoading, setLyricsSaving } = lyricsEditorState;
   const dialogTrackIdSet = useMemo(() => new Set(dialogTrackIds), [dialogTrackIds]);
@@ -156,6 +162,12 @@ export function useTrackEditor({
     }
 
     matchDialogVersion.current += 1;
+    setMatchLoading(false);
+    setMatchError("");
+    setMatchMode("track");
+    setAlbumQuery("");
+    setAlbumCandidates([]);
+    setSelectedReleaseId("");
     matchRequestVersion.current = {};
     setLyricsPendingIds(new Set());
     setMatchPreviews([]);
@@ -233,6 +245,10 @@ export function useTrackEditor({
   };
 
   return {
+    openAlbumMatchDialog: (ids: number[]) => {
+      openPropertiesDialog("online", ids);
+      setMatchMode("album");
+    },
     dialogPrimaryTrack,
     refreshEditedTracks,
     openPropertiesDialog,

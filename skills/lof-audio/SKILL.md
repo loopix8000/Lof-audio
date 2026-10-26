@@ -1,6 +1,6 @@
 ---
 name: lof-audio
-description: Lof Audio에 연결해 워크스페이스의 음악을 찾고 재생하며, 플레이리스트·태그·가사를 관리한다. 사용자가 Lof Audio 라이브러리나 재생 중인 음악의 조회·변경을 요청할 때 사용한다.
+description: Lof Audio의 음악·재생목록·태그·가사를 관리하고, AI가 여러 웹·카탈로그 출처를 대조해 곡·앨범 메타정보를 조사하고 수정한다. Lof Audio 라이브러리 작업이나 음악 정보의 검증·정정을 요청할 때 사용한다.
 ---
 
 # Lof Audio
@@ -15,10 +15,13 @@ description: Lof Audio에 연결해 워크스페이스의 음악을 찾고 재�
 
 ## 태그와 가사
 
+음악 정보를 찾아 검증·정정하는 요청은 [여러 출처 메타정보 파이프라인](references/metadata-research.md)을 따른다. AI가 사용 가능한 웹 검색·브라우저·다른 MCP로 출처를 직접 확인하고, `metadata_research_prepare` → `metadata_research_preview` → `metadata_research_apply` → `track_read`/`metadata_research_history`를 사용한다. 내장 MusicBrainz 검색은 선택 가능한 후보 출처 하나이며, 단독으로 검증 완료로 취급하지 않는다. 사용자가 정확한 값을 직접 지정한 단순 수정은 아래의 `track_update`를 사용할 수 있다.
+
 - `track_read`로 최신 `track`과 `revision`을 읽은 다음 `track_update`의 `expectedRevision`에 전달한다. `changes`에는 요청한 필드만 넣는다. `CONFLICT`이면 다시 읽고 바뀐 내용과 비교해 요청한 수정만 재적용한다. 이전 내용을 둔 채 revision만 바꾸지 않는다.
 - 생략한 필드는 유지된다. `year`, `trackNumber`, `coverDataUrl`, `syncedLyrics`, `plainLyrics`의 `null`은 해당 값을 지운다. 커버 원본이 필요할 때만 `track_read`에 `includeCover: true`를 전달한다. 커버 쓰기는 이미지 data URL을 사용하며 조회 결과의 로컬 커버 URL을 쓰기 값으로 보내지 않는다.
 - `syncedLyrics`를 저장하면 일반 가사도 생성한다. `plainLyrics`만 수정하면 기존 싱크 가사를 해제한다. 파일에 `.lrc`도 쓸지는 `saveLrcFile`로 명시하거나 앱 설정을 따른다.
 - `lyrics_search`와 `metadata_search`는 후보만 조회한다. 후보가 곡과 일치하는지 확인하고 사용자가 요청한 항목만 저장한다. 같은 파일의 태그·가사·즐겨찾기는 그 파일을 공유하는 다른 워크스페이스에서도 바뀐다.
+- 앨범 단위로 찾을 때는 `album_search(workspaceId, trackId)`로 발매판을 확인하고, 선택한 `releaseId`와 실제 `trackIds`로 `album_preview`를 호출한다. 앨범 전체를 한 번 조회해 제목과 재생 시간으로 매칭하며, 순서만으로 곡을 연결하지 않는다. 저장은 각 곡의 `track_read` revision을 확인한 뒤 `track_update`로 요청한 필드만 반영한다.
 - 저장 뒤 `track_read`로 실제 내용과 새 revision을 확인하고 성공한 변경만 완료했다고 알린다. 앱 밖에서 파일을 고쳤다면 먼저 다시 색인하고 최신 내용을 조회한다.
 
 ## 폴더와 플레이리스트

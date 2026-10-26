@@ -1,6 +1,7 @@
-import { Sparkles } from "lucide-react";
+import { Disc, Sparkles } from "lucide-react";
 import { getFallbackCoverUrl } from "../../utils/lrc";
 import { useAudioAppContext } from "../../app/AppContext";
+import { Select } from "../../components/Select";
 
 export function MetadataMatchTab() {
   const {
@@ -10,6 +11,7 @@ export function MetadataMatchTab() {
     setManualMbQuery,
     handleManualMbSearch,
     matchLoading,
+    matchError,
     handleLookupAutoMatchPreview,
     applyFieldTitle,
     setApplyFieldTitle,
@@ -34,11 +36,34 @@ export function MetadataMatchTab() {
     confirmedMatchCount,
     setDialogOpen,
     handleConfirmApplyMatches,
+    matchMode, setMatchMode,
+    albumQuery, setAlbumQuery,
+    albumCandidates, selectedReleaseId,
+    handleSearchAlbum, handleSelectAlbum,
+    dialogPrimaryTrack,
   } = useAudioAppContext();
   return (dialogTab === "online" && (
     <>
       <div className="modal-content">
+        <div className="match-mode-controls">
+          <button className={`ui-btn ${matchMode === "track" ? "solid" : ""}`} disabled={matchLoading} onClick={() => setMatchMode("track")}>곡별 조회</button>
+          <button className={`ui-btn ${matchMode === "album" ? "solid" : ""}`} disabled={matchLoading} onClick={() => setMatchMode("album")}><Disc size={13} /> 앨범 조회</button>
+        </div>
         {/* Top Lookup Bar */}
+        {matchMode === "album" ? (
+          <>
+            <div className="match-query-controls">
+              <input className="form-field" value={albumQuery} onChange={event => setAlbumQuery(event.target.value)} placeholder={`${dialogPrimaryTrack?.artist || ""} ${dialogPrimaryTrack?.album || "앨범명 또는 아티스트"}`} onKeyDown={event => event.key === "Enter" && handleSearchAlbum()} />
+              <button className="ui-btn solid" disabled={matchLoading} onClick={handleSearchAlbum}>{matchLoading ? "앨범 조회 중…" : "앨범 검색"}</button>
+            </div>
+            {albumCandidates.length > 0 && <div className="album-match-releases" role="group" aria-label="앨범 후보">
+              {albumCandidates.map(album => <button key={album.releaseId} className={`album-match-release ${selectedReleaseId === album.releaseId ? "selected" : ""}`} aria-pressed={selectedReleaseId === album.releaseId} disabled={matchLoading} onClick={() => handleSelectAlbum(album.releaseId)}>
+                <strong>{album.album}</strong>
+                <span>{[album.artist, album.date, album.country, `${album.trackCount}곡`].filter(Boolean).join(" · ")}</span>
+              </button>)}
+            </div>}
+          </>
+        ) : (
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {dialogTrackIds.length === 1 && (
             <input
@@ -70,10 +95,12 @@ export function MetadataMatchTab() {
           >
             <Sparkles size={13} />
             {matchLoading
-              ? "매칭 후보 조회 중..."
+              ? `곡 정보 조회 중 (${matchPreviews.length}/${dialogTrackIds.length})`
               : `자동 매칭 후보 조회 (${dialogTrackIds.length}곡)`}
           </button>
         </div>
+        )}
+        {matchError && <div role="alert" className="match-error">{matchError}</div>}
 
         {/* Field Selection Toggles */}
         <div className="match-field-toggles">
@@ -263,27 +290,21 @@ export function MetadataMatchTab() {
                     </div>
 
                     {p.candidates.length > 0 && (
-                      <select
-                        className="form-field"
-                        style={{ height: 24, fontSize: 11, padding: "0 6px" }}
+                      <Select
+                        aria-label={`${orig.title} 메타데이터 후보`}
+                        style={{ height: 24, fontSize: 11 }}
                         value={selIdx}
-                        onChange={(e) =>
-                          void handleSelectMatchCandidate(p.trackId, Number(e.target.value), p.candidates[Number(e.target.value)] || null)
+                        onChange={value =>
+                          void handleSelectMatchCandidate(p.trackId, value, p.candidates[value] || null)
                         }
-                      >
-                        {p.candidates.map((c, idx) => (
-                          <option
-                            key={`${c.recordingId}-${c.releaseId || idx}`}
-                            value={idx}
-                          >
-                            후보 #{idx + 1}: {c.title} — {c.artist} ({c.album}
-                            {c.year ? `, ${c.year}` : ""})
-                          </option>
-                        ))}
-                        <option value={-1}>
-                          메타데이터 변경 안 함 (가사만 적용)
-                        </option>
-                      </select>
+                        options={[
+                          ...p.candidates.map((c, idx) => ({
+                            value: idx,
+                            label: `후보 #${idx + 1}: ${c.title} — ${c.artist} (${c.album}${c.year ? `, ${c.year}` : ""})`,
+                          })),
+                          { value: -1, label: "메타데이터 변경 안 함 (가사만 적용)" },
+                        ]}
+                      />
                     )}
 
                     {cand ? (
@@ -336,7 +357,7 @@ export function MetadataMatchTab() {
                         marginTop: 2,
                       }}
                     >
-                      {lyricsPendingIds.has(p.trackId) ? <span className="match-badge">가사 후보 조회 중…</span> : p.matchedSyncedLyrics ? (
+                      {lyricsPendingIds.has(p.trackId) ? <span className="match-badge">가사 후보 조회 중…</span> : p.lyricsError ? <span className="match-badge">가사 조회 실패</span> : p.matchedSyncedLyrics ? (
                         <span className="match-badge synced">
                           싱크 가사 매칭됨
                         </span>
@@ -357,6 +378,8 @@ export function MetadataMatchTab() {
                           </span>
                         )}
                     </div>
+                    {p.metadataError && <div role="alert" className="match-error">메타데이터 조회 실패: {p.metadataError}</div>}
+                    {p.lyricsError && <div role="alert" className="match-error">{p.lyricsError}</div>}
                   </div>
                 </div>
               );
@@ -379,7 +402,7 @@ export function MetadataMatchTab() {
           </button>
           <button
             className="ui-btn solid"
-            disabled={confirmedMatchCount === 0 || matchLoading || lyricsPendingIds.size > 0}
+            disabled={confirmedMatchCount === 0 || matchLoading || (applyFieldLyrics && lyricsPendingIds.size > 0)}
             onClick={handleConfirmApplyMatches}
           >
             선택 항목 적용 ({confirmedMatchCount}곡)

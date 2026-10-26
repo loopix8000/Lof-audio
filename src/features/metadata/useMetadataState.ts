@@ -1,8 +1,14 @@
 import { useState, useRef } from "react";
-import { TrackMatchPreview } from "../../types";
+import { AlbumCandidate, TrackMatchPreview } from "../../types";
 
 export function useMetadataState() {
   const [matchLoading, setMatchLoading] = useState(false);
+  const [matchError, setMatchError] = useState("");
+  const matchLookupVersion = useRef(0);
+  const [matchMode, setMatchMode] = useState<"track" | "album">("track");
+  const [albumQuery, setAlbumQuery] = useState("");
+  const [albumCandidates, setAlbumCandidates] = useState<AlbumCandidate[]>([]);
+  const [selectedReleaseId, setSelectedReleaseId] = useState("");
 
   const [matchPreviews, setMatchPreviews] = useState<TrackMatchPreview[]>([]);
 
@@ -37,6 +43,13 @@ export function useMetadataState() {
   const [manualMbQuery, setManualMbQuery] = useState("");
 
   return {
+    matchMode, setMatchMode,
+    albumQuery, setAlbumQuery,
+    albumCandidates, setAlbumCandidates,
+    selectedReleaseId, setSelectedReleaseId,
+    matchError,
+    setMatchError,
+    matchLookupVersion,
     setManualMbQuery,
     matchDialogVersion,
     matchRequestVersion,

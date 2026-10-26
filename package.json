@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "tauri": "node tools/tauri.mjs",
     "mcp": "node tools/mcp.mjs",
+    "mcp:schema": "node tools/update-research-schema.mjs",
     "updater:keygen": "node scripts/generate-updater-key.mjs",
     "updater:prepare": "node .github/scripts/prepare-updater.mjs"
   },

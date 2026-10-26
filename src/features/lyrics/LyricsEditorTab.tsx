@@ -1,4 +1,5 @@
 import { useAudioAppContext } from "../../app/AppContext";
+import { Select } from "../../components/Select";
 
 export function LyricsEditorTab() {
   const {
@@ -26,20 +27,15 @@ export function LyricsEditorTab() {
       <div className="modal-content">
         {dialogTracks.length > 1 && (
           <div style={{ display: "flex", gap: 6 }}>
-            <select
-              className="form-field"
+            <Select
               aria-label="가사 편집할 곡"
               value={lyricsEditingTrackId ?? ""}
-              onChange={event => setLyricsEditingTrackId(Number(event.target.value))}
-            >
-              {dialogTracks.map(track => (
-                <option key={track.id} value={track.id}>
-                  {track.title} · {track.artist}
-                  {lyricsEntries[track.id]?.dirty ? " · 수정됨" : ""}
-                  {lyricsEntries[track.id]?.status ? ` · ${lyricsEntries[track.id].status}` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={value => setLyricsEditingTrackId(Number(value))}
+              options={dialogTracks.map(track => ({
+                value: track.id,
+                label: `${track.title} · ${track.artist}${lyricsEntries[track.id]?.dirty ? " · 수정됨" : ""}${lyricsEntries[track.id]?.status ? ` · ${lyricsEntries[track.id].status}` : ""}`,
+              }))}
+            />
             <button
               className="ui-btn solid"
               onClick={handleSearchAllLyrics}
@@ -142,7 +138,7 @@ export function LyricsEditorTab() {
         )}
 
         <textarea
-          className="form-textarea"
+          className="form-textarea lyrics-editor-textarea"
           placeholder="일반 가사 또는 [00:12.34] 형식의 LRC 가사 입력..."
           value={lyricDraft}
           onChange={(e) => setLyricDraft(e.target.value)}
