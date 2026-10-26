@@ -88,8 +88,8 @@ const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
 /** Merges stored values over defaults, dropping anything malformed or out of range. */
 export function normalizeSettings(raw: Record<string, unknown>): AppSettings {
   const d = DEFAULT_SETTINGS;
-  const cols = (raw.colWidths ?? {}) as Record<string, unknown>;
-  const match = (raw.matchApplyFields ?? {}) as Record<string, unknown>;
+  const cols = (raw.colWidths && typeof raw.colWidths === "object" ? raw.colWidths : {}) as Record<string, unknown>;
+  const match = (raw.matchApplyFields && typeof raw.matchApplyFields === "object" ? raw.matchApplyFields : {}) as Record<string, unknown>;
   const colWidths = Object.fromEntries(
     Object.entries(d.colWidths).map(([k, def]) => [
       k,

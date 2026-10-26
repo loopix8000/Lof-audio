@@ -6,7 +6,10 @@ export function parseLrc(lrcText: string | null | undefined, offsetMs = 0): Lyri
   if (!lrcText || !lrcText.trim()) return [];
 
   const lines: LyricLine[] = [];
-  const offsetSecs = offsetMs / 1000;
+  const embeddedOffsets = [...lrcText.matchAll(/\[offset:([+-]?\d+)\]/gi)];
+  const embeddedOffset = embeddedOffsets[embeddedOffsets.length - 1];
+  // LRC offsets advance lyrics; the app's positive adjustment delays them.
+  const offsetSecs = (offsetMs - Number(embeddedOffset?.[1] || 0)) / 1000;
 
   for (const rawLine of lrcText.split(/\r?\n/)) {
     const matches = [...rawLine.matchAll(TIME_REGEX)];
@@ -40,7 +43,7 @@ export function parseLrc(lrcText: string | null | undefined, offsetMs = 0): Lyri
 
 export function findActiveLyricIndex(lines: LyricLine[], positionSecs: number): number {
   if (lines.length === 0) return -1;
-  let activeIdx = 0;
+  let activeIdx = -1;
   for (let i = 0; i < lines.length; i++) {
     if (positionSecs + 0.08 >= lines[i].timeSecs) {
       activeIdx = i;
@@ -89,52 +92,6 @@ export function formatDuration(secs: number | null | undefined): string {
   return `${mins}:${rem.toString().padStart(2, "0")}`;
 }
 
-export function parseFilenamePatternPreview(
-  fileName: string,
-  pattern: string
-): Record<string, string> {
-  const stem = fileName.replace(/\.[^/.]+$/, "");
-  const tokens: string[] = [];
-  const literals: string[] = [];
-
-  let rest = pattern;
-  while (true) {
-    const start = rest.indexOf("%");
-    if (start === -1) break;
-    const before = rest.slice(0, start);
-    const afterStart = rest.slice(start + 1);
-    const end = afterStart.indexOf("%");
-    if (end === -1) break;
-    const token = afterStart.slice(0, end);
-    if (tokens.length > 0) {
-      literals.push(before);
-    }
-    tokens.push(token.toLowerCase());
-    rest = afterStart.slice(end + 1);
-  }
-
-  const out: Record<string, string> = {};
-  if (tokens.length === 0) return out;
-
-  let cur = stem;
-  for (let i = 0; i < tokens.length; i++) {
-    if (i < literals.length) {
-      const sep = literals[i];
-      if (sep) {
-        const idx = cur.indexOf(sep);
-        if (idx !== -1) {
-          out[tokens[i]] = cur.slice(0, idx).trim();
-          cur = cur.slice(idx + sep.length);
-          continue;
-        }
-      }
-    } else {
-      out[tokens[i]] = cur.trim();
-    }
-  }
-  return out;
-}
-
 const BRACKETED_SEGMENT =
   /[\[({【「『〔〈《][^\])}】」』〕〉》]*[\])}】」』〕〉》]/gu;
 
@@ -166,7 +123,12 @@ export function getCoverInitial(text: string): string {
   return Array.from(normalized).find((ch) => /\p{N}/u.test(ch)) ?? "♪";
 }
 
+const fallbackCovers = new Map<string, string>();
+
 export function getFallbackCoverUrl(title: string, artist: string): string {
+  const key = JSON.stringify([title, artist]);
+  const cached = fallbackCovers.get(key);
+  if (cached) return cached;
   const palettes = [
     ["#f1f5f9", "#e2e8f0", "#64748b"],
     ["#fef2f2", "#fee2e2", "#ef4444"],
@@ -192,5 +154,8 @@ export function getFallbackCoverUrl(title: string, artist: string): string {
     <text x="200" y="226" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="76" font-weight="600" fill="${fg}" opacity="0.65" text-anchor="middle">${initial}</text>
   </svg>`;
 
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  if (fallbackCovers.size >= 512) fallbackCovers.delete(fallbackCovers.keys().next().value!);
+  fallbackCovers.set(key, url);
+  return url;
 }

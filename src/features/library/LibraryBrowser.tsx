@@ -1,0 +1,230 @@
+import { ChevronLeft, Edit3, PanelRight, Music, FolderPlus, FilePlus } from "lucide-react";
+import { formatDuration } from "../../utils/lrc";
+import { VirtualTrackTable } from "../../components/TrackRows";
+import { TrackTableHeader } from "./TrackTableHeader";
+import { useAudioAppContext } from "../../app/AppContext";
+
+export function LibraryBrowser() {
+  const {
+    subFilter,
+    navCategory,
+    setSubFilter,
+    currentViewTitle,
+    effectiveLibView,
+    artistCards,
+    searchFilteredTracks,
+    albumCards,
+    folderCards,
+    displayedTracks,
+    totalDisplayedDuration,
+    selectedIds,
+    openPropertiesDialog,
+    showRightLyricsInLib,
+    setShowRightLyricsInLib,
+    handleAddFolder,
+    handleAddFiles,
+    handlePlayTrack,
+    setSelectedIds,
+    tableEntries,
+    selectedIdSet,
+    playback,
+    handleRowClick,
+    handleRowContextMenu,
+    handleToggleFavorite,
+    folders,
+  } = useAudioAppContext();
+  return (<div className="main-column">
+    <div className="surface-header">
+      <div className="surface-title-group">
+        {subFilter !== null &&
+          (navCategory === "artists" ||
+            navCategory === "albums" ||
+            navCategory === "folders") && (
+            <button
+              className="surface-back-btn"
+              onClick={() => setSubFilter(null)}
+              title="상위 그리드 목록으로 돌아가기"
+            >
+              <ChevronLeft size={14} />
+              <span>
+                {navCategory === "artists"
+                  ? "아티스트"
+                  : navCategory === "albums"
+                    ? "앨범"
+                    : "폴더"}
+              </span>
+            </button>
+          )}
+        <span className="surface-title" title={currentViewTitle}>
+          {currentViewTitle}
+        </span>
+        <span className="surface-subtitle">
+          {effectiveLibView === "artist-grid"
+            ? `${artistCards.length}명의 아티스트 · 총 ${searchFilteredTracks.length}곡`
+            : effectiveLibView === "album-grid"
+              ? `${albumCards.length}개의 앨범 · 총 ${searchFilteredTracks.length}곡`
+              : effectiveLibView === "folder-grid"
+                ? `${folderCards.length}개의 폴더 · 총 ${searchFilteredTracks.length}곡`
+                : `${displayedTracks.length}곡 · 총 ${formatDuration(totalDisplayedDuration)}${selectedIds.length > 1
+                  ? ` · ${selectedIds.length}곡 선택됨`
+                  : ""
+                }`}
+        </span>
+      </div>
+
+      <div className="surface-controls">
+        {selectedIds.length > 0 && (
+          <button
+            className="ui-btn"
+            onClick={() => openPropertiesDialog("tags")}
+          >
+            <Edit3 size={13} />
+            {selectedIds.length > 1
+              ? `속성·태그 편집 (${selectedIds.length}곡)`
+              : "속성·태그 편집"}
+          </button>
+        )}
+
+        <button
+          className={`ui-btn ghost icon-only ${showRightLyricsInLib ? "active" : ""
+            }`}
+          onClick={() =>
+            setShowRightLyricsInLib(!showRightLyricsInLib)
+          }
+          title="우측 가사 패널 표시/숨기기"
+        >
+          <PanelRight size={14} />
+        </button>
+      </div>
+    </div>
+
+    {/* Contextual Content Viewport:
+                    - All Music -> Grouped Table
+                    - Favorites / Playlist -> Flat Table
+                    - Artists / Albums / Folders -> Grid View at top level, Grouped Table when clicked! */}
+    {displayedTracks.length === 0 ? (
+      <div
+        style={{
+          margin: "auto",
+          textAlign: "center",
+          color: "var(--text-muted)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <Music size={32} strokeWidth={1.5} />
+        <div style={{ fontSize: 13.5, color: "var(--text-secondary)" }}>
+          {folders.length === 0 ? "이 워크스페이스에 음악 폴더를 추가하세요" : "표시할 오디오 트랙이 없습니다"}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <button className="ui-btn solid" onClick={handleAddFolder}>
+            <FolderPlus size={13} /> 음악 폴더 추가
+          </button>
+          <button className="ui-btn" onClick={handleAddFiles}>
+            <FilePlus size={13} /> 파일 열기
+          </button>
+        </div>
+      </div>
+    ) : effectiveLibView === "artist-grid" ? (
+      <div className="album-grid-view">
+        {artistCards.map((card) => (
+          <div
+            key={card.artist}
+            className="album-card-item"
+            onClick={() => {
+              setSubFilter(card.artist);
+            }}
+            onDoubleClick={() => {
+              setSubFilter(card.artist);
+              if (card.tracks[0]) handlePlayTrack(card.tracks[0].id);
+            }}
+          >
+            <div className="album-card-cover">
+              <img src={card.cover} alt="" />
+            </div>
+            <div className="album-card-name" title={card.artist}>
+              {card.artist}
+            </div>
+            <div className="album-card-artist">
+              앨범 {card.albumCount}개 · {card.trackCount}곡
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : effectiveLibView === "album-grid" ? (
+      <div className="album-grid-view">
+        {albumCards.map((card) => (
+          <div
+            key={card.album}
+            className="album-card-item"
+            onClick={() => {
+              setSubFilter(card.album);
+            }}
+            onDoubleClick={() => {
+              setSubFilter(card.album);
+              if (card.tracks[0]) handlePlayTrack(card.tracks[0].id);
+            }}
+          >
+            <div className="album-card-cover">
+              <img src={card.cover} alt="" />
+            </div>
+            <div className="album-card-name" title={card.album}>
+              {card.album}
+            </div>
+            <div className="album-card-artist" title={card.artist}>
+              {card.artist} · {card.tracks.length}곡
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : effectiveLibView === "folder-grid" ? (
+      <div className="album-grid-view">
+        {folderCards.map((card) => (
+          <div
+            key={card.folderPath}
+            className="album-card-item"
+            onClick={() => {
+              setSubFilter(card.folderPath);
+            }}
+            onDoubleClick={() => {
+              setSubFilter(card.folderPath);
+              if (card.tracks[0]) handlePlayTrack(card.tracks[0].id);
+            }}
+          >
+            <div className="album-card-cover">
+              <img src={card.cover} alt="" />
+            </div>
+            <div
+              className="album-card-name"
+              title={card.folderPath}
+            >
+              {card.folderName}
+            </div>
+            <div
+              className="album-card-artist"
+              title={card.folderPath}
+            >
+              {card.tracks.length}곡
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div
+        className="table-viewport"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setSelectedIds([]);
+          }
+        }}
+      >
+        <table className="track-grid">
+          <TrackTableHeader />
+          <VirtualTrackTable rows={tableEntries} grouped={effectiveLibView === "grouped"} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={handleRowClick} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} />
+        </table>
+      </div>
+    )}
+  </div>);
+}

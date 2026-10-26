@@ -55,6 +55,12 @@ impl ScanQueue {
     pub fn status(&self) -> Option<ScanProgress> {
         self.current.lock().unwrap().clone()
     }
+
+    pub fn pending_folders(&self) -> Vec<String> {
+        let mut folders: Vec<_> = self.pending.lock().unwrap().iter().cloned().collect();
+        folders.sort();
+        folders
+    }
 }
 
 pub fn spawn_worker(app: AppHandle, rx: Receiver<String>) {
@@ -107,8 +113,8 @@ fn scan_folder(app: &AppHandle, state: &AppState, folder: &str) -> Result<(), St
         if !entry.file_type().is_file() || !is_supported_audio(p) {
             continue;
         }
-        match entry.metadata() {
-            Ok(meta) => files.push((p.to_path_buf(), FileStamp::of(&meta))),
+        match FileStamp::of_path(p) {
+            Ok(stamp) => files.push((p.to_path_buf(), stamp)),
             Err(_) => walk_failed = true,
         }
     }
@@ -130,7 +136,9 @@ fn scan_folder(app: &AppHandle, state: &AppState, folder: &str) -> Result<(), St
     report(app, state, &progress);
 
     let mut last_emit = Instant::now();
+    let mut changed_ids = Vec::new();
     for chunk in changed.chunks(BATCH_SIZE) {
+        let _guard = state.metadata_lock.lock().map_err(|e| e.to_string())?;
         let items = read_tags_parallel(chunk);
         // The folder may have been removed by the user mid-scan.
         if !state.db.has_folder(folder)? {
@@ -138,12 +146,12 @@ fn scan_folder(app: &AppHandle, state: &AppState, folder: &str) -> Result<(), St
             report(app, state, &progress);
             return Ok(());
         }
-        state.db.upsert_tracks(&items)?;
+        changed_ids.extend(state.db.upsert_tracks(&items)?);
         progress.processed += chunk.len();
         progress.added_or_updated += items.len();
         report(app, state, &progress);
         if !items.is_empty() && last_emit.elapsed() >= CHANGE_EMIT_INTERVAL {
-            let _ = app.emit("library-changed", ());
+            let _ = app.emit("library-changed", std::mem::take(&mut changed_ids));
             last_emit = Instant::now();
         }
     }
@@ -158,13 +166,14 @@ fn scan_folder(app: &AppHandle, state: &AppState, folder: &str) -> Result<(), St
         if !stale.is_empty() {
             state.db.delete_tracks(&stale)?;
             progress.removed = stale.len();
+            changed_ids.extend(stale);
         }
     }
 
     progress.done = true;
     report(app, state, &progress);
-    if progress.added_or_updated > 0 || progress.removed > 0 {
-        let _ = app.emit("library-changed", ());
+    if !changed_ids.is_empty() {
+        let _ = app.emit("library-changed", changed_ids);
     }
     Ok(())
 }

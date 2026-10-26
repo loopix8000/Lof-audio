@@ -2,9 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import {
   getCurrentWindow,
-  LogicalSize,
-  PhysicalPosition,
-  PhysicalSize,
 } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -20,7 +17,9 @@ import {
   TagUpdateInput,
   Track,
   TrackMatchPreview,
-  UIMode,
+  WorkspaceState,
+  AutomationInfo,
+  AudioSkillStatus,
 } from "./types";
 
 const isTauri = () =>
@@ -61,161 +60,6 @@ export async function watchWindowMaximized(
 export async function closeWindow(): Promise<void> {
   if (!isTauri()) return;
   await getCurrentWindow().close();
-}
-
-interface SavedWindowBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  isMaximized?: boolean;
-}
-
-let savedDesktopBounds: SavedWindowBounds | null = null;
-let savedPlayerBounds: SavedWindowBounds | null = null;
-
-function loadBounds(key: string): SavedWindowBounds | null {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (
-      typeof parsed?.x === "number" &&
-      typeof parsed?.y === "number" &&
-      typeof parsed?.width === "number" &&
-      typeof parsed?.height === "number"
-    ) {
-      return parsed;
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-function saveBounds(key: string, bounds: SavedWindowBounds): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(bounds));
-  } catch {
-    // ignore
-  }
-}
-
-export async function setWindowMode(
-  mode: UIMode,
-  alwaysOnTop = false
-): Promise<void> {
-  if (!isTauri()) return;
-  try {
-    const win = getCurrentWindow();
-    const isMax = await win.isMaximized();
-
-    if (mode === "player") {
-      // 1. Save current Library ("desktop") window position, size, and maximized state
-      if (isMax) {
-        const prev = savedDesktopBounds || loadBounds("lof.bounds.desktop");
-        if (prev) {
-          savedDesktopBounds = { ...prev, isMaximized: true };
-          saveBounds("lof.bounds.desktop", savedDesktopBounds);
-        } else {
-          savedDesktopBounds = {
-            x: 100,
-            y: 100,
-            width: 1360,
-            height: 840,
-            isMaximized: true,
-          };
-        }
-        await win.unmaximize();
-      } else {
-        const [pos, size] = await Promise.all([
-          win.outerPosition(),
-          win.innerSize(),
-        ]);
-        savedDesktopBounds = {
-          x: pos.x,
-          y: pos.y,
-          width: size.width,
-          height: size.height,
-          isMaximized: false,
-        };
-        saveBounds("lof.bounds.desktop", savedDesktopBounds);
-      }
-
-      // 2. Apply Player mode window size & position (restoring previous Player bounds if available)
-      await win.setMinSize(new LogicalSize(380, 560));
-      const playerBounds = savedPlayerBounds || loadBounds("lof.bounds.player");
-      if (playerBounds && playerBounds.width >= 360 && playerBounds.height >= 500) {
-        await win.setSize(
-          new PhysicalSize(playerBounds.width, playerBounds.height)
-        );
-        await win.setPosition(
-          new PhysicalPosition(playerBounds.x, playerBounds.y)
-        );
-      } else {
-        await win.setSize(new LogicalSize(410, 760));
-      }
-      await win.setAlwaysOnTop(alwaysOnTop);
-    } else {
-      // 1. Save current Player window position & size before switching back to Library mode
-      if (!isMax) {
-        const [pos, size] = await Promise.all([
-          win.outerPosition(),
-          win.innerSize(),
-        ]);
-        savedPlayerBounds = {
-          x: pos.x,
-          y: pos.y,
-          width: size.width,
-          height: size.height,
-        };
-        saveBounds("lof.bounds.player", savedPlayerBounds);
-      } else {
-        await win.unmaximize();
-      }
-
-      // 2. Restore exact Library ("desktop") window position, size, and maximized state
-      await win.setAlwaysOnTop(alwaysOnTop);
-      await win.setMinSize(new LogicalSize(920, 600));
-      const desktopBounds =
-        savedDesktopBounds || loadBounds("lof.bounds.desktop");
-      if (desktopBounds) {
-        if (desktopBounds.width >= 800 && desktopBounds.height >= 500) {
-          await win.setSize(
-            new PhysicalSize(desktopBounds.width, desktopBounds.height)
-          );
-        } else {
-          await win.setSize(new LogicalSize(1360, 840));
-        }
-        await win.setPosition(
-          new PhysicalPosition(desktopBounds.x, desktopBounds.y)
-        );
-        if (desktopBounds.isMaximized) {
-          await win.maximize();
-        }
-      } else {
-        await win.setSize(new LogicalSize(1360, 840));
-      }
-    }
-  } catch (err) {
-    console.warn("Window mode warning:", err);
-  }
-}
-
-export async function resizePlayerStackWindow(
-  showLyrics: boolean,
-  showPlaylist: boolean
-): Promise<void> {
-  if (!isTauri()) return;
-  try {
-    const win = getCurrentWindow();
-    let h = 216;
-    if (showLyrics) h += 172;
-    if (showPlaylist) h += 392;
-    await win.setSize(new LogicalSize(400, h));
-  } catch (err) {
-    console.warn("Stack resize warning:", err);
-  }
 }
 
 export async function toggleWindowPin(pin: boolean): Promise<void> {
@@ -264,23 +108,57 @@ export async function onLibraryScanProgress(
   return listen<ScanProgress>("library-scan-progress", (e) => handler(e.payload));
 }
 
-export async function onLibraryChanged(handler: () => void): Promise<UnlistenFn> {
+export async function onLibraryChanged(handler: (trackIds: number[]) => void): Promise<UnlistenFn> {
   if (!isTauri()) return () => {};
-  return listen("library-changed", () => handler());
+  return listen<number[]>("library-changed", event => handler(event.payload));
+}
+
+export async function onAutomationLibraryChanged(handler: () => void): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
+  return listen("automation-library-changed", handler);
+}
+
+export async function onAutomationPlayback(handler: (value: { action: string; playback: PlaybackState; workspaceState: WorkspaceState }) => void): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
+  return listen<{ action: string; playback: PlaybackState; workspaceState: WorkspaceState }>("automation-playback", event => handler(event.payload));
+}
+
+export async function pickSkillsFolderDialog(): Promise<string | null> {
+  const path = await open({ directory: true, multiple: false, title: "AI 클라이언트의 스킬 상위 폴더 선택" });
+  return typeof path === "string" ? path : null;
 }
 
 export const api = {
+  getAutomationInfo: (): Promise<AutomationInfo> => invoke("get_automation_info"),
+  getSkillStatus: (skillsDirectory?: string): Promise<AudioSkillStatus> => invoke("get_audio_skill_status", { skillsDirectory: skillsDirectory ?? null }),
+  installSkill: (skillsDirectory: string, expectedRevision: string, expectedInstalledRevision?: string | null): Promise<AudioSkillStatus> =>
+    invoke("install_audio_skill", { skillsDirectory, expectedRevision, expectedInstalledRevision: expectedInstalledRevision ?? null }),
   getLibraryState: (): Promise<LibrarySnapshot> =>
     invoke("get_library_state"),
 
-  scanFolder: (folderPath: string): Promise<LibrarySnapshot> =>
-    invoke("scan_folder", { folderPath }),
+  getLibraryTracks: (trackIds: number[]): Promise<Track[]> =>
+    invoke("get_library_tracks", { trackIds }),
+
+  scanFolder: (folderPath: string, workspaceId: number): Promise<LibrarySnapshot> =>
+    invoke("scan_folder", { folderPath, workspaceId }),
 
   getScanStatus: (): Promise<ScanProgress | null> =>
     invoke("get_scan_status"),
 
-  rescanLibrary: (force: boolean): Promise<void> =>
-    invoke("rescan_library", { force }),
+  rescanLibrary: (force: boolean, workspaceId: number): Promise<void> =>
+    invoke("rescan_library", { force, workspaceId }),
+
+  createWorkspace: (name: string): Promise<WorkspaceState> =>
+    invoke("create_workspace", { name }),
+
+  renameWorkspace: (workspaceId: number, name: string): Promise<WorkspaceState> =>
+    invoke("rename_workspace", { workspaceId, name }),
+
+  selectWorkspace: (workspaceId: number): Promise<WorkspaceState> =>
+    invoke("select_workspace", { workspaceId }),
+
+  deleteWorkspace: (workspaceId: number): Promise<WorkspaceState> =>
+    invoke("delete_workspace", { workspaceId }),
 
   getSettings: (): Promise<Record<string, unknown>> =>
     invoke("get_settings"),
@@ -294,14 +172,14 @@ export const api = {
   revealDataDir: (): Promise<void> =>
     invoke("reveal_data_dir"),
 
-  importFiles: (filePaths: string[]): Promise<LibrarySnapshot> =>
-    invoke("import_files", { filePaths }),
+  importFiles: (filePaths: string[], workspaceId: number): Promise<LibrarySnapshot> =>
+    invoke("import_files", { filePaths, workspaceId }),
 
-  removeFolder: (folderPath: string): Promise<LibrarySnapshot> =>
-    invoke("remove_folder", { folderPath }),
+  removeFolder: (folderPath: string, workspaceId: number): Promise<LibrarySnapshot> =>
+    invoke("remove_folder", { folderPath, workspaceId }),
 
-  deleteTracksFromLibrary: (trackIds: number[]): Promise<LibrarySnapshot> =>
-    invoke("delete_tracks_from_library", { trackIds }),
+  deleteTracksFromLibrary: (trackIds: number[], workspaceId: number): Promise<LibrarySnapshot> =>
+    invoke("delete_tracks_from_library", { trackIds, workspaceId }),
 
   playTrack: (trackId: number): Promise<PlaybackState> =>
     invoke("play_track", { trackId }),
@@ -330,6 +208,12 @@ export const api = {
   updateTags: (input: TagUpdateInput): Promise<Track[]> =>
     invoke("update_tags", { input }),
 
+  previewFilenamePattern: (trackIds: number[], pattern: string): Promise<Record<number, Record<string, string>>> =>
+    invoke("preview_filename_pattern", { trackIds, pattern }),
+
+  previewMatchLyrics: (trackId: number, candidate: MusicBrainzCandidate | null): Promise<LrcLibTrack | null> =>
+    invoke("preview_match_lyrics", { trackId, candidate }),
+
   applyFilenamePattern: (input: FilenamePatternInput): Promise<Track[]> =>
     invoke("apply_filename_pattern", { input }),
 
@@ -338,9 +222,6 @@ export const api = {
 
   updateLyricOffset: (trackId: number, offsetMs: number): Promise<Track> =>
     invoke("update_lyric_offset", { trackId, offsetMs }),
-
-  autoFetchLyrics: (trackId: number, saveLrcFile: boolean): Promise<Track> =>
-    invoke("auto_fetch_lyrics", { trackId, saveLrcFile }),
 
   searchLyricsManual: (query: string): Promise<LrcLibTrack[]> =>
     invoke("search_lyrics_manual", { query }),
@@ -367,17 +248,6 @@ export const api = {
       customQuery: customQuery || null,
     }),
 
-  applyMusicbrainzMetadata: (
-    trackId: number,
-    candidate: MusicBrainzCandidate,
-    fetchCover: boolean
-  ): Promise<Track> =>
-    invoke("apply_musicbrainz_metadata", {
-      trackId,
-      candidate,
-      fetchCover,
-    }),
-
   previewAutoMatch: (trackIds: number[]): Promise<TrackMatchPreview[]> =>
     invoke("preview_auto_match", { trackIds }),
 
@@ -386,21 +256,8 @@ export const api = {
   ): Promise<Track[]> =>
     invoke("apply_confirmed_matches", { items }),
 
-  batchAutoEnrich: (
-    trackIds: number[],
-    fetchMetadata: boolean,
-    fetchCover: boolean,
-    fetchLyrics: boolean
-  ): Promise<Track[]> =>
-    invoke("batch_auto_enrich", {
-      trackIds,
-      fetchMetadata,
-      fetchCover,
-      fetchLyrics,
-    }),
-
-  createPlaylist: (name: string): Promise<Playlist[]> =>
-    invoke("create_playlist", { name }),
+  createPlaylist: (name: string, workspaceId: number): Promise<Playlist[]> =>
+    invoke("create_playlist", { name, workspaceId }),
 
   deletePlaylist: (playlistId: number): Promise<Playlist[]> =>
     invoke("delete_playlist", { playlistId }),

@@ -3,18 +3,30 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use reqwest::{Client, Response, StatusCode};
 use serde_json::Value;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 fn build_http_client() -> Result<Client, String> {
-    Client::builder()
-        .user_agent("LofAudio/0.1.0 (https://github.com/lof-audio; contact@lof-audio.local)")
-        .timeout(Duration::from_secs(12))
-        .build()
-        .map_err(|e| format!("HTTP 클라이언트 생성 실패: {}", e))
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    static CLIENT: OnceLock<Result<Client, String>> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            Client::builder()
+                .user_agent(
+                    "LofAudio/0.1.0 (https://github.com/lof-audio; contact@lof-audio.local)",
+                )
+                .timeout(Duration::from_secs(12))
+                .build()
+                .map_err(|e| format!("HTTP 클라이언트 생성 실패: {}", e))
+        })
+        .clone()
 }
 
 /// Backoff before each retry; LRCLIB intermittently answers 503 under load.
-const LRCLIB_RETRY_DELAYS: [Duration; 2] = [Duration::from_millis(700), Duration::from_millis(1800)];
+const LRCLIB_RETRY_DELAYS: [Duration; 2] =
+    [Duration::from_millis(700), Duration::from_millis(1800)];
 
 fn is_retryable_status(status: StatusCode) -> bool {
     status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS
@@ -201,10 +213,12 @@ pub async fn search_musicbrainz(
                 .and_then(|v| v.as_array())
                 .and_then(|arr| arr.first())
                 .and_then(|first| {
-                    first
-                        .get("name")
-                        .and_then(|n| n.as_str())
-                        .or_else(|| first.get("artist").and_then(|a| a.get("name")).and_then(|n| n.as_str()))
+                    first.get("name").and_then(|n| n.as_str()).or_else(|| {
+                        first
+                            .get("artist")
+                            .and_then(|a| a.get("name"))
+                            .and_then(|n| n.as_str())
+                    })
                 })
                 .unwrap_or(artist)
                 .to_string();
@@ -311,6 +325,12 @@ pub async fn fetch_cover_art_by_mbid(release_mbid: &str) -> Result<String, Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_client_initializes_tls_without_an_update_check() {
+        assert!(build_http_client().is_ok());
+        assert!(build_http_client().is_ok());
+    }
 
     // Hits the live LRCLIB API; run with `cargo test -- --ignored`.
     #[tokio::test]

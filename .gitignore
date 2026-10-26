@@ -18,8 +18,9 @@ Thumbs.db
 # Release signing keys (never commit)
 .private/
 
-# Local-only helper scripts
-/scripts/
+# Local-only helpers; keep the documented signing-key generator in source control
+/scripts/*
+!/scripts/generate-updater-key.mjs
 
 # Generated at release time (contains the updater public key)
 src-tauri/tauri.updater.generated.json

@@ -131,6 +131,32 @@ button svg {
   z-index: 50;
 }
 
+.workspace-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 4px 10px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.workspace-picker, .workspace-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.workspace-picker { flex: 1; }
+.workspace-select { flex: 1; width: 100%; max-width: 250px; min-width: 70px; height: 27px; }
+.workspace-folder-count { color: var(--text-muted); white-space: nowrap; font-size: 11px; }
+.workspace-form { display: flex; flex-basis: 100%; align-items: center; gap: 6px; }
+.workspace-form input { flex: 1; min-width: 0; height: 28px; }
+.workspace-delete-confirm { flex-wrap: wrap; }
+.workspace-delete-confirm span { flex: 1; min-width: 180px; }
+.automation-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 16px; }
+.settings-box .modal-tabs { overflow-x: auto; flex-shrink: 0; }
+
 .titlebar-left {
   display: flex;
   align-items: center;

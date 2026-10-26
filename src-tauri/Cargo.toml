@@ -1,7 +1,7 @@
 [package]
 name = "lof-audio"
-version = "0.1.0-alpha.1"
-description = "Foobar2000 + YouTube Music Hybrid Desktop Music Player"
+version = "0.1.0-beta.1"
+description = "Local music library, tag editor and synced lyrics player"
 authors = ["Lof Audio"]
 edition = "2021"
 
@@ -18,12 +18,18 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rodio = { version = "0.19", default-features = false, features = ["symphonia-all"] }
-symphonia = { version = "0.5.4", default-features = false, features = ["aac", "adpcm", "flac", "isomp4", "mp3", "pcm", "vorbis", "wav"] }
+symphonia = { version = "0.5.4", default-features = false, features = ["aac", "adpcm", "alac", "flac", "isomp4", "mp3", "ogg", "pcm", "vorbis", "wav"] }
+symphonia-adapter-libopus = "0.2"
 lofty = "0.21"
 rusqlite = { version = "0.32", features = ["bundled"] }
-reqwest = { version = "0.12", features = ["json"] }
-tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls-no-provider", "system-proxy"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 base64 = "0.22"
 walkdir = "2.5"
-urlencoding = "2.1"
+getrandom = "0.3"
+hex = "0.4"
+sha2 = "0.10"
+httparse = "1.10"
+tempfile = "3"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }

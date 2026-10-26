@@ -1,0 +1,932 @@
+[
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "앱 버전, 선택한 워크스페이스, 색인 상태 확인",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "app_status"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "워크스페이스 ID·이름·연결 폴더 및 현재 선택 조회",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "workspace_list"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "빈 워크스페이스를 만들고 선택",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "workspace_create"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "워크스페이스 이름 변경",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "workspace_rename"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "앱에서 볼 워크스페이스 선택",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "name": "workspace_select"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "워크스페이스의 연결과 재생목록 삭제. 음악 파일은 유지",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "name": "workspace_delete"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "절대 경로의 음악 폴더 연결 후 백그라운드 색인 요청",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "folderPath": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "folderPath"
+      ],
+      "type": "object"
+    },
+    "name": "folder_add"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "해당 워크스페이스의 폴더 연결 해제. 다른 워크스페이스와 음악 파일은 유지",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "folderPath": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "folderPath"
+      ],
+      "type": "object"
+    },
+    "name": "folder_remove"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "해당 워크스페이스 색인 요청. 완료는 scan_status로 확인",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "force": {
+          "type": "boolean"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "name": "library_rescan"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "해당 워크스페이스의 현재 색인 진행 상황",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "name": "scan_status"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "워크스페이스 안에서 제목·아티스트·앨범·장르·파일명 검색. 가사 본문은 track_read로 조회",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "favoritesOnly": {
+          "type": "boolean"
+        },
+        "limit": {
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "offset": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "query": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "name": "library_search"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "트랙의 현재 태그·가사 및 수정용 revision 조회. includeCover=true이면 커버 원본을 data URL로 포함",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "includeCover": {
+          "type": "boolean"
+        },
+        "trackId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackId"
+      ],
+      "type": "object"
+    },
+    "name": "track_read"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "revision이 일치할 때 명시한 태그·가사만 파일과 DB에 저장. null은 해당 값 제거",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "album": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "albumArtist": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "artist": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "coverDataUrl": {
+              "maxLength": 6000000,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "genre": {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "lyricOffsetMs": {
+              "maximum": 600000,
+              "minimum": -600000,
+              "type": "integer"
+            },
+            "plainLyrics": {
+              "maxLength": 2000000,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "syncedLyrics": {
+              "maxLength": 2000000,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "title": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            "trackNumber": {
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "year": {
+              "maximum": 9999,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "expectedRevision": {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        },
+        "saveLrcFile": {
+          "type": "boolean"
+        },
+        "trackId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackId",
+        "expectedRevision",
+        "changes"
+      ],
+      "type": "object"
+    },
+    "name": "track_update"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "현재 워크스페이스에서 곡 제외. 음악 파일과 다른 워크스페이스는 유지",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "trackIds": {
+          "items": {
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 200,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackIds"
+      ],
+      "type": "object"
+    },
+    "name": "track_remove"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "즐겨찾기를 지정한 값으로 설정. 같은 음악 파일을 공유하는 워크스페이스에도 적용",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "favorite": {
+          "type": "boolean"
+        },
+        "trackId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackId",
+        "favorite"
+      ],
+      "type": "object"
+    },
+    "name": "track_favorite"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "현재 재생 상태 조회",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "playback_status"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "지정한 워크스페이스의 곡 재생",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "trackId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackId"
+      ],
+      "type": "object"
+    },
+    "name": "playback_play"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "일시 정지",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "playback_pause"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "현재 곡 재생 재개",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "playback_resume"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "재생 중지",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "playback_stop"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "현재 곡의 지정한 초로 이동",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "positionSecs": {
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "positionSecs"
+      ],
+      "type": "object"
+    },
+    "name": "playback_seek"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "음량 설정 (0~1)",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "volume": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "volume"
+      ],
+      "type": "object"
+    },
+    "name": "playback_volume"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "재생 배속 설정 (0.5~2)",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "speed": {
+          "maximum": 2,
+          "minimum": 0.5,
+          "type": "number"
+        }
+      },
+      "required": [
+        "speed"
+      ],
+      "type": "object"
+    },
+    "name": "playback_speed"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "LRCLIB 가사 후보 검색. 파일에 자동 적용하지 않음",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "name": "lyrics_search"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "description": "MusicBrainz 태그 후보 조회. 파일에 자동 적용하지 않음",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "trackId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "trackId"
+      ],
+      "type": "object"
+    },
+    "name": "metadata_search"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "워크스페이스의 플레이리스트와 표시 가능한 trackIds 조회",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "name": "playlist_list"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "워크스페이스에 플레이리스트 생성",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "playlist_create"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "해당 워크스페이스의 플레이리스트 삭제",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "playlistId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "playlistId"
+      ],
+      "type": "object"
+    },
+    "name": "playlist_delete"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "플레이리스트에 워크스페이스의 곡 추가",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "playlistId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "trackIds": {
+          "items": {
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxItems": 200,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "playlistId",
+        "trackIds"
+      ],
+      "type": "object"
+    },
+    "name": "playlist_add_tracks"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "플레이리스트에서 한 곡 제거",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "playlistId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "trackId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspaceId",
+        "playlistId",
+        "trackId"
+      ],
+      "type": "object"
+    },
+    "name": "playlist_remove_track"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "번들 스킬 revision과 선택한 설치 경로의 상태 확인",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "skillsDirectory": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "skill_status"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "앱에 포함된 스킬·API 안내·현재 도구 스키마를 UTF-8 파일로 조회",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "knownRevision": {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "name": "skill_get"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "실제 AI 스킬 폴더에 lof-audio 스킬 설치·업데이트. 기존 폴더는 별도로 백업",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "expectedInstalledRevision": {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        },
+        "expectedRevision": {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        },
+        "skillsDirectory": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "skillsDirectory",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "name": "skill_install"
+  }
+]

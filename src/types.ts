@@ -40,9 +40,41 @@ export interface Playlist {
   id: number;
   name: string;
   trackIds: number[];
+  workspaceId: number;
 }
 
-export interface LibrarySnapshot {
+export interface Workspace {
+  id: number;
+  name: string;
+  folders: string[];
+  excludedTrackIds: number[];
+}
+
+export interface WorkspaceState {
+  workspaces: Workspace[];
+  activeWorkspaceId: number;
+    workspaceRevision: number;
+}
+
+export interface AutomationInfo {
+  url: string;
+  mcpUrl: string;
+  headers: { Authorization: string };
+  runtimePath: string;
+  toolCount: number;
+  mcpConfig: { mcpServers: { "lof-audio": { command: string; args: string[] } } };
+}
+
+export interface AudioSkillStatus {
+  name: string;
+  version: string;
+  revision: string;
+  installed?: { exists: boolean; revision: string | null; upToDate: boolean };
+  changed?: boolean;
+  backupPath?: string | null;
+}
+
+export interface LibrarySnapshot extends WorkspaceState {
   tracks: Track[];
   folders: string[];
   playlists: Playlist[];
@@ -136,8 +168,4 @@ export interface LyricLine {
   text: string;
 }
 
-export type UIMode = "desktop" | "player";
 export type RepeatMode = "off" | "all" | "one";
-export type RightTab = "lyrics" | "tags" | "metadata" | "queue";
-export type CenterViewMode = "table" | "grid";
-export type PlayerSubTab = "now" | "lyrics" | "library" | "tags";

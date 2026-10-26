@@ -101,6 +101,24 @@ pub struct Playlist {
     pub id: i64,
     pub name: String,
     pub track_ids: Vec<i64>,
+    pub workspace_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Workspace {
+    pub id: i64,
+    pub name: String,
+    pub folders: Vec<String>,
+    pub excluded_track_ids: Vec<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceState {
+    pub workspaces: Vec<Workspace>,
+    pub active_workspace_id: i64,
+    pub workspace_revision: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,4 +145,3 @@ pub struct ConfirmTrackMatchItem {
     pub synced_lyrics: Option<String>,
     pub plain_lyrics: Option<String>,
 }
-
