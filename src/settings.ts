@@ -2,6 +2,8 @@ import { RepeatMode } from "./types";
 
 export type SortField = "trackNumber" | "title" | "artist" | "album" | "durationSecs" | "year";
 
+export type UpdateChannel = "stable" | "beta";
+
 export interface ColumnWidths {
   num: number;
   artist: number;
@@ -43,6 +45,9 @@ export interface AppSettings {
   saveLrcFile: boolean;
   matchApplyFields: MatchApplyFields;
   lyricOffsetStepMs: number;
+  // Updates
+  updateChannel: UpdateChannel;
+  autoCheckUpdates: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -64,6 +69,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   saveLrcFile: true,
   matchApplyFields: { title: true, artist: true, album: true, cover: true, lyrics: true },
   lyricOffsetStepMs: 100,
+  // Only prerelease builds exist so far, so new installs follow the beta channel
+  updateChannel: "beta",
+  autoCheckUpdates: true,
 };
 
 export const NP_ART_MAX_RANGE = { min: 280, max: 640, step: 20 };
@@ -119,6 +127,8 @@ export function normalizeSettings(raw: Record<string, unknown>): AppSettings {
     lyricOffsetStepMs: pick(raw.lyricOffsetStepMs, d.lyricOffsetStepMs, (v) =>
       LYRIC_OFFSET_STEPS.includes(v as number),
     ),
+    updateChannel: pick(raw.updateChannel, d.updateChannel, (v) => v === "stable" || v === "beta"),
+    autoCheckUpdates: pick(raw.autoCheckUpdates, d.autoCheckUpdates, isBool),
   };
 }
 

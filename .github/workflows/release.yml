@@ -1,0 +1,71 @@
+name: Build Windows release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the release and matching update channels after building
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: windows-x64-release
+          cache-on-failure: true
+      - run: npm ci
+      - name: Prepare updater configuration
+        id: updater
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+          SIGNING_KEY_PRESENT: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_KEY_PRESENT -ne 'true') { throw 'TAURI_SIGNING_PRIVATE_KEY secret is required.' }
+          npm run updater:prepare
+      - name: Build and upload draft release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Lof Audio v__VERSION__
+          releaseBody: Windows 설치 파일과 업데이트 정보를 포함합니다.
+          releaseDraft: true
+          prerelease: ${{ steps.updater.outputs.prerelease == 'true' }}
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
+          updaterJsonPreferNsis: true
+          args: --bundles nsis --config src-tauri/tauri.updater.generated.json
+      - name: Set release notes
+        if: hashFiles('RELEASE_NOTES.md') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.updater.outputs.version }}
+        shell: pwsh
+        run: gh release edit "v$env:RELEASE_VERSION" --repo "$env:GITHUB_REPOSITORY" --notes-file RELEASE_NOTES.md
+      - name: Publish release and update channels
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+        run: node .github/scripts/publish-release.mjs

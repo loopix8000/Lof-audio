@@ -4,6 +4,7 @@ pub mod models;
 pub mod scanner;
 pub mod services;
 pub mod tags;
+pub mod updater;
 
 use audio::{AudioCommand, AudioEngine};
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -82,6 +83,7 @@ pub struct AppInfo {
     pub version: String,
     pub data_dir: String,
     pub supported_formats: Vec<&'static str>,
+    pub updater_configured: bool,
 }
 
 pub(crate) const SUPPORTED_AUDIO_EXTENSIONS: [&str; 8] =
@@ -120,6 +122,7 @@ async fn get_app_info(app: tauri::AppHandle, state: State<'_, AppState>) -> Resu
         version: app.package_info().version.to_string(),
         data_dir: state.app_data_dir.to_string_lossy().to_string(),
         supported_formats: SUPPORTED_AUDIO_EXTENSIONS.to_vec(),
+        updater_configured: updater::updater_configured(&app),
     })
 }
 
@@ -919,6 +922,7 @@ async fn remove_track_from_playlist(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app: &mut tauri::App| {
             let app_data_dir = app
                 .path()
@@ -962,6 +966,7 @@ pub fn run() {
             rescan_library,
             get_app_info,
             reveal_data_dir,
+            updater::update_check,
             import_files,
             remove_folder,
             delete_tracks_from_library,

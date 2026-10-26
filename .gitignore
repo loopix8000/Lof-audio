@@ -19,4 +19,7 @@ Thumbs.db
 .private/
 
 # Local-only helper scripts
-scripts/
+/scripts/
+
+# Generated at release time (contains the updater public key)
+src-tauri/tauri.updater.generated.json

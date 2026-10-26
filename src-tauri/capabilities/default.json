@@ -22,6 +22,8 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-is-maximized",
     "core:window:allow-close",
-    "dialog:default"
+    "dialog:default",
+    "updater:allow-download",
+    "updater:allow-install"
   ]
 }

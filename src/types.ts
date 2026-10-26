@@ -52,6 +52,8 @@ export interface AppInfo {
   version: string;
   dataDir: string;
   supportedFormats: string[];
+  /** False in dev builds, which ship without the updater public key. */
+  updaterConfigured: boolean;
 }
 
 export interface ScanProgress {

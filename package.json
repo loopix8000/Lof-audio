@@ -8,11 +8,13 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "updater:keygen": "node scripts/generate-updater-key.mjs"
+    "updater:keygen": "node scripts/generate-updater-key.mjs",
+    "updater:prepare": "node .github/scripts/prepare-updater.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-updater": "^2.14.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
