@@ -1,6 +1,6 @@
 [package]
 name = "lof-audio"
-version = "0.1.1"
+version = "0.1.2"
 description = "Local music library, tag editor and synced lyrics player"
 authors = ["Lof Audio"]
 edition = "2021"

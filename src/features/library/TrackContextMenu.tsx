@@ -18,15 +18,14 @@ export function TrackContextMenu() {
     visibilityBusy,
     setNavCategory,
     setSubFilter,
-    setNowPlayingOpen,
     setShowPlayerBrowser,
   } = useAudioAppContext();
-  // Same jump as the artist/album links on the playback screens: filter the library and leave the overlay
+  // Same jump as the artist/album links on the playback screens: filter the library (and with it the
+  // playback screen's queue) while leaving the playback screen open; only the compact browser closes
   const goTo = (category: "artists" | "albums", value: string) => {
     setCtxMenu(null);
     setNavCategory(category);
     setSubFilter(value);
-    setNowPlayingOpen(false);
     setShowPlayerBrowser(false);
   };
   const menuRef = useRef<HTMLDivElement>(null);

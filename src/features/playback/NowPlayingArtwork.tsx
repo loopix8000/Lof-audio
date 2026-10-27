@@ -10,7 +10,6 @@ export function NowPlayingArtwork() {
     activeTrack,
     setNavCategory,
     setSubFilter,
-    setNowPlayingOpen,
     handleToggleFavorite,
     openPropertiesDialog,
     handleRowContextMenu,
@@ -60,7 +59,6 @@ export function NowPlayingArtwork() {
           if (activeTrack?.artist) {
             setNavCategory("artists");
             setSubFilter(activeTrack.artist);
-            setNowPlayingOpen(false);
           }
         }}
       >
@@ -78,7 +76,6 @@ export function NowPlayingArtwork() {
           if (activeTrack?.album) {
             setNavCategory("albums");
             setSubFilter(activeTrack.album);
-            setNowPlayingOpen(false);
           }
         }}
       >
