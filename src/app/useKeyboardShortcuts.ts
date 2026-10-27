@@ -42,7 +42,7 @@ export function useKeyboardShortcuts({
   const { handleTogglePlay, handlePlayTrack, handleSeek } = playbackControls;
   const { openPropertiesDialog } = trackEditor;
   const { selectedIds, setSelectedIds } = libraryState;
-  const { displayedTracks, effectiveLibView, visibleAlbumTrackIds } = libraryView;
+  const { displayedTracks, effectiveLibView, visibleGroupedTrackIds } = libraryView;
   const { handleDeleteSelected } = libraryActions;
   const { playback } = playbackState;
   useEffect(() => {
@@ -80,8 +80,8 @@ export function useKeyboardShortcuts({
         handlePlayTrack(selectedIds[0]);
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        setSelectedIds(appMode === "library" && !nowPlayingOpen && effectiveLibView === "grouped"
-          ? visibleAlbumTrackIds : displayedTracks.map((t) => t.id));
+        setSelectedIds(appMode === "library" && !nowPlayingOpen && (effectiveLibView === "grouped" || effectiveLibView === "folder-category")
+          ? visibleGroupedTrackIds : displayedTracks.map((t) => t.id));
       } else if (e.code === "Delete" && selectedIds.length > 0) {
         e.preventDefault();
         handleDeleteSelected();
@@ -95,6 +95,6 @@ export function useKeyboardShortcuts({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [playback, selectedIds, displayedTracks, visibleAlbumTrackIds, effectiveLibView, appMode, dialogOpen, nowPlayingOpen, coverZoom, settingsOpen]);
+  }, [playback, selectedIds, displayedTracks, visibleGroupedTrackIds, effectiveLibView, appMode, dialogOpen, nowPlayingOpen, coverZoom, settingsOpen]);
 
 }

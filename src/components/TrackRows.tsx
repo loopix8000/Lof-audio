@@ -1,5 +1,5 @@
 import React, { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Heart } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, Heart } from "lucide-react";
 import { Track } from "../types";
 import { formatDuration, getFallbackCoverUrl } from "../utils/lrc";
 
@@ -11,7 +11,13 @@ export interface AlbumGroup {
   cover: string;
   tracks: Track[];
 }
-export type TableEntry = { kind: "album"; group: AlbumGroup; collapsed: boolean } | { kind: "track"; track: Track; index: number; previous?: number; next?: number };
+export interface FolderGroup {
+  key: string;
+  path: string;
+  name: string;
+  tracks: Track[];
+}
+export type TableEntry = { kind: "album"; group: AlbumGroup; collapsed: boolean } | { kind: "folder"; group: FolderGroup; collapsed: boolean } | { kind: "track"; track: Track; index: number; previous?: number; next?: number };
 interface Actions {
   onSelect: (id: number, event: React.MouseEvent) => void;
   onPlay: (id: number) => void;
@@ -20,6 +26,8 @@ interface Actions {
   onSelectAlbum: (ids: number[]) => void;
   onAlbumContext?: (group: AlbumGroup, event: React.MouseEvent) => void;
   onToggleAlbum?: (key: string) => void;
+  onFolderContext?: (group: FolderGroup, event: React.MouseEvent) => void;
+  onToggleFolder?: (key: string) => void;
 }
 interface RowProps extends Actions {
   track: Track;
@@ -88,9 +96,9 @@ interface ListProps extends Actions {
   currentId: number | null;
   isPlaying: boolean;
 }
-export const VirtualTrackTable = memo(function VirtualTrackTable(p: ListProps & { rows: TableEntry[]; grouped: boolean }) {
+export const VirtualTrackTable = memo(function VirtualTrackTable(p: ListProps & { rows: TableEntry[]; grouped: boolean; showTrackCovers?: boolean }) {
   const body = useRef<HTMLTableSectionElement>(null);
-  const sizes = useMemo(() => p.rows.map(row => row.kind === "album" ? 60 : 34), [p.rows]);
+  const sizes = useMemo(() => p.rows.map(row => row.kind === "track" ? 34 : 60), [p.rows]);
   const range = useWindow(sizes, body);
   const spacer = (height: number) => height > 0 ? <tr aria-hidden="true"><td colSpan={8} style={{ height, padding: 0, border: 0 }} /></tr> : null;
   return <tbody ref={body}>{spacer(range.before)}{p.rows.slice(range.start, range.end).map(row => {
@@ -103,8 +111,18 @@ export const VirtualTrackTable = memo(function VirtualTrackTable(p: ListProps & 
         <img className="album-header-art" src={g.cover} alt="" loading="lazy" /><div className="album-header-info"><span className="album-header-name">{g.album}</span><span className="album-header-meta">{g.artist}{g.year ? ` · ${g.year}` : ""} · {g.tracks.length}곡</span></div><div className="album-header-rule" />
       </div></td></tr>;
     }
+    if (row.kind === "folder") {
+      const g = row.group;
+      return <tr key={`folder:${g.key}`} className="album-group-row" style={{ height: 60 }} onContextMenu={event => p.onFolderContext?.(g, event)} onClick={() => p.onSelectAlbum(g.tracks.map(t => t.id))}><td colSpan={8}><div className="album-header-box">
+        <button type="button" className="album-group-toggle" aria-label={`${g.path} ${row.collapsed ? "펼치기" : "접기"}`} aria-expanded={!row.collapsed} onClick={event => { event.stopPropagation(); p.onToggleFolder?.(g.key); }}>
+          {row.collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+        </button>
+        <span className="folder-group-icon" aria-hidden="true"><Folder size={22} /></span>
+        <div className="album-header-info folder-group-info"><span className="album-header-name" title={g.path}>{g.name}</span><span className="folder-group-path" title={g.path}>{g.path}</span><span className="album-header-meta">{g.tracks.length}곡</span></div><div className="album-header-rule" />
+      </div></td></tr>;
+    }
     const t = row.track;
-    return <TableTrackRow key={t.id} track={t} index={row.index} selected={p.selected.has(t.id)} previousSelected={row.previous !== undefined && p.selected.has(row.previous)} nextSelected={row.next !== undefined && p.selected.has(row.next)} active={p.currentId === t.id} playing={p.currentId === t.id && p.isPlaying} showCover={!p.grouped} onSelect={p.onSelect} onPlay={p.onPlay} onContext={p.onContext} onFavorite={p.onFavorite} onSelectAlbum={p.onSelectAlbum} />;
+    return <TableTrackRow key={t.id} track={t} index={row.index} selected={p.selected.has(t.id)} previousSelected={row.previous !== undefined && p.selected.has(row.previous)} nextSelected={row.next !== undefined && p.selected.has(row.next)} active={p.currentId === t.id} playing={p.currentId === t.id && p.isPlaying} showCover={p.showTrackCovers ?? !p.grouped} onSelect={p.onSelect} onPlay={p.onPlay} onContext={p.onContext} onFavorite={p.onFavorite} onSelectAlbum={p.onSelectAlbum} />;
   })}{spacer(range.after)}</tbody>;
 });
 export const VirtualTrackList = memo(function VirtualTrackList(p: ListProps & { tracks: Track[] }) {

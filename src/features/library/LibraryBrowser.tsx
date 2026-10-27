@@ -1,4 +1,4 @@
-import { ChevronLeft, Edit3, PanelRight, Music, FolderPlus, FilePlus, Search, LayoutGrid, List } from "lucide-react";
+import { ChevronLeft, Edit3, PanelRight, Music, FolderPlus, FilePlus, Search, LayoutGrid, List, ListTree } from "lucide-react";
 import { formatDuration } from "../../utils/lrc";
 import { VirtualTrackTable } from "../../components/TrackRows";
 import { TrackTableHeader } from "./TrackTableHeader";
@@ -34,7 +34,11 @@ export function LibraryBrowser() {
     collapsedAlbumCount,
     toggleAlbumGroup,
     setAllAlbumGroupsCollapsed,
-    visibleAlbumTrackIds,
+    folderGroupCount,
+    collapsedFolderCount,
+    toggleFolderGroup,
+    setAllFolderGroupsCollapsed,
+    visibleGroupedTrackIds,
     selectedIdSet,
     playback,
     handleRowClick,
@@ -45,6 +49,10 @@ export function LibraryBrowser() {
     openAlbumMatchDialog,
     handleCollectionContextMenu,
   } = useAudioAppContext();
+  const grouped = effectiveLibView === "grouped" || effectiveLibView === "folder-category";
+  const groupCount = effectiveLibView === "folder-category" ? folderGroupCount : albumGroupCount;
+  const collapsedCount = effectiveLibView === "folder-category" ? collapsedFolderCount : collapsedAlbumCount;
+  const setAllCollapsed = effectiveLibView === "folder-category" ? setAllFolderGroupsCollapsed : setAllAlbumGroupsCollapsed;
   return (<div className="main-column">
     <div className="surface-header">
       <div className="surface-title-group">
@@ -112,6 +120,15 @@ export function LibraryBrowser() {
             >
               <List size={14} />
             </button>
+            <button
+              className="ui-btn ghost icon-only"
+              title="범주 보기"
+              aria-label="범주 보기"
+              aria-pressed={folderViewMode === "category"}
+              onClick={() => setFolderViewMode("category")}
+            >
+              <ListTree size={14} />
+            </button>
           </div>
         )}
         {navCategory === "albums" && subFilter !== null && (
@@ -144,10 +161,10 @@ export function LibraryBrowser() {
       </div>
     </div>
 
-    {effectiveLibView === "grouped" && albumGroupCount > 0 && (
-      <div className="album-group-controls" role="group" aria-label="앨범 묶음 표시">
-        <button className="ui-btn" disabled={collapsedAlbumCount === albumGroupCount} onClick={() => setAllAlbumGroupsCollapsed(true)}>전체 접기</button>
-        <button className="ui-btn" disabled={collapsedAlbumCount === 0} onClick={() => setAllAlbumGroupsCollapsed(false)}>전체 펼치기</button>
+    {grouped && groupCount > 0 && (
+      <div className="album-group-controls" role="group" aria-label={effectiveLibView === "folder-category" ? "폴더 묶음 표시" : "앨범 묶음 표시"}>
+        <button className="ui-btn" disabled={collapsedCount === groupCount} onClick={() => setAllCollapsed(true)}>전체 접기</button>
+        <button className="ui-btn" disabled={collapsedCount === 0} onClick={() => setAllCollapsed(false)}>전체 펼치기</button>
       </div>
     )}
 
@@ -276,7 +293,7 @@ export function LibraryBrowser() {
       >
         <table className="track-grid">
           <TrackTableHeader />
-          <VirtualTrackTable onAlbumContext={(group, event) => handleCollectionContextMenu({ kind: "album", value: group.album || "Unknown Album", label: group.album || "Unknown Album" }, event)} rows={tableEntries} grouped={effectiveLibView === "grouped"} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={(id, event) => handleRowClick(id, event, effectiveLibView === "grouped" ? visibleAlbumTrackIds : undefined)} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} onToggleAlbum={toggleAlbumGroup} />
+          <VirtualTrackTable onAlbumContext={(group, event) => handleCollectionContextMenu({ kind: "album", value: group.album || "Unknown Album", label: group.album || "Unknown Album" }, event)} onFolderContext={(group, event) => handleCollectionContextMenu({ kind: "folder", value: group.path, label: group.name }, event)} rows={tableEntries} grouped={grouped} showTrackCovers={effectiveLibView === "folder-category" || !grouped} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={(id, event) => handleRowClick(id, event, grouped ? visibleGroupedTrackIds : undefined)} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} onToggleAlbum={toggleAlbumGroup} onToggleFolder={toggleFolderGroup} />
         </table>
       </div>
     )}
