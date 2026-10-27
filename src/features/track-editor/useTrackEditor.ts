@@ -2,6 +2,7 @@ import React, { useMemo, useEffect } from "react";
 import { api } from "../../api";
 import { mergeTrackChanges } from "../../library";
 import { createLyricsEntries } from "../lyrics/lyricsBatch";
+import { useTagProgress } from "./useTagProgress";
 import { DialogTab } from "../../app/types";
 import type { TrackEditorStateModel } from "./useTrackEditorState";
 import type { LibraryStateModel } from "../library/useLibraryState";
@@ -75,6 +76,7 @@ export function useTrackEditor({
     setSelectedReleaseId,
   } = metadataState;
   const { setLyricsEntries, setLyricsEditingTrackId, lyricsSessionVersion, lyricsBusy, setLrcLoading, setLyricsSaving } = lyricsEditorState;
+  const { tagProgress, runTagWrite } = useTagProgress();
   const dialogTrackIdSet = useMemo(() => new Set(dialogTrackIds), [dialogTrackIds]);
 
   const dialogTracks = useMemo(
@@ -194,7 +196,7 @@ export function useTrackEditor({
     if (dialogTrackIds.length === 0) return;
 
     try {
-      const updated = await api.updateTags({
+      const updated = await runTagWrite("태그 저장 중", dialogTrackIds.length, () => api.updateTags({
         trackIds: dialogTrackIds,
         title: tagTitle.trim() || null,
         artist: tagArtist.trim() || null,
@@ -206,7 +208,7 @@ export function useTrackEditor({
         genre: tagGenre.trim() || null,
         coverDataUrl: tagCoverUrl.trim() || null,
         saveLrcFile: false,
-      });
+      }));
       setTracks(previous => mergeTrackChanges(previous, updated.map(t => t.id), updated));
       setDialogOpen(false);
       notify(`${dialogTrackIds.length}곡 태그가 저장되었습니다.`);
@@ -219,10 +221,10 @@ export function useTrackEditor({
   const handleApplyPattern = async () => {
     if (dialogTrackIds.length === 0 || !filenamePattern.trim()) return;
     try {
-      const updated = await api.applyFilenamePattern({
+      const updated = await runTagWrite("파일명에서 태그 추출 중", dialogTrackIds.length, () => api.applyFilenamePattern({
         trackIds: dialogTrackIds,
         pattern: filenamePattern.trim(),
-      });
+      }));
       setTracks(previous => mergeTrackChanges(previous, updated.map(t => t.id), updated));
       setDialogOpen(false);
       notify(`${dialogTrackIds.length}곡 파일명에서 태그를 추출했습니다.`);
@@ -251,6 +253,8 @@ export function useTrackEditor({
     },
     dialogPrimaryTrack,
     refreshEditedTracks,
+    tagProgress,
+    runTagWrite,
     openPropertiesDialog,
     handleCoverUpload,
     handleSaveTags,

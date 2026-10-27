@@ -5,7 +5,9 @@ import { useAudioAppContext } from "../../app/AppContext";
 export function TrackContextMenu() {
   const {
     ctxMenu,
-    handlePlayTrack,
+    handlePlayFromLibrary,
+    handleQueueTracks,
+    displayedTracks,
     setCtxMenu,
     openPropertiesDialog,
     selectedIds,
@@ -28,6 +30,13 @@ export function TrackContextMenu() {
     setSubFilter(value);
     setShowPlayerBrowser(false);
   };
+  // Queue the selection in list order (selection order follows clicks, not the list)
+  const queueSelection = (playNext: boolean) => {
+    setCtxMenu(null);
+    const order = new Map(displayedTracks.map((track, index) => [track.id, index]));
+    const ids = [...selectedIds].sort((a, b) => (order.get(a) ?? Infinity) - (order.get(b) ?? Infinity));
+    handleQueueTracks(ids, playNext);
+  };
   const menuRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const menu = menuRef.current;
@@ -43,12 +52,18 @@ export function TrackContextMenu() {
       <button
         className="native-menu-item"
         onClick={() => {
-          handlePlayTrack(ctxMenu.track.id);
+          void handlePlayFromLibrary(ctxMenu.track.id);
           setCtxMenu(null);
         }}
       >
         <span>재생</span>
         <span className="menu-kbd">Enter</span>
+      </button>
+      <button className="native-menu-item" onClick={() => queueSelection(true)}>
+        <span>{selectedIds.length > 1 ? `다음에 재생 (${selectedIds.length}곡)` : "다음에 재생"}</span>
+      </button>
+      <button className="native-menu-item" onClick={() => queueSelection(false)}>
+        <span>{selectedIds.length > 1 ? `재생 대기열에 추가 (${selectedIds.length}곡)` : "재생 대기열에 추가"}</span>
       </button>
       {(ctxMenu.track.artist || ctxMenu.track.album) && <div className="native-menu-sep" />}
       {ctxMenu.track.artist && (

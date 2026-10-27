@@ -2,6 +2,7 @@ import { ChevronDown, Heart, Shuffle, Repeat1, Repeat } from "lucide-react";
 import { formatDuration } from "../../utils/lrc";
 import { NativePrevIcon, NativePauseIcon, NativePlayIcon, NativeNextIcon, DraggableSlider, VolumeControl } from "../../components/TransportControls";
 import { useAudioAppContext } from "../../app/AppContext";
+import { MarqueeText } from "../../components/MarqueeText";
 
 export function AudioDeck() {
   const {
@@ -52,7 +53,7 @@ export function AudioDeck() {
         </div>
       </div>
       <div className="deck-meta">
-        <div
+        <MarqueeText
           className="deck-title clickable"
           title={
             activeTrack?.title
@@ -62,8 +63,8 @@ export function AudioDeck() {
           onClick={() => setNowPlayingOpen((prev) => !prev)}
         >
           {activeTrack?.title || "재생 대기 중"}
-        </div>
-        <div
+        </MarqueeText>
+        <MarqueeText
           className="deck-artist"
           title={
             activeTrack
@@ -74,7 +75,7 @@ export function AudioDeck() {
           {activeTrack
             ? `${activeTrack.artist} · ${activeTrack.album}`
             : "트랙을 선택하세요"}
-        </div>
+        </MarqueeText>
       </div>
       {activeTrack && (
         <button

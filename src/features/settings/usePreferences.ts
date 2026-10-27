@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AppInfo } from "../../types";
-import { DEFAULT_SETTINGS, UpdateChannel } from "../../settings";
+import { DEFAULT_SETTINGS, ResumePosition, UpdateChannel } from "../../settings";
 import { api } from "../../api";
 import { THEME_CACHE_KEY } from "./constants";
 import { SettingsTab } from "../../app/types";
@@ -28,6 +28,12 @@ export function usePreferences() {
 
   const [rescanOnStartup, setRescanOnStartup] = useState(DEFAULT_SETTINGS.rescanOnStartup);
 
+  const [resumeOnStartup, setResumeOnStartup] = useState(DEFAULT_SETTINGS.resumeOnStartup);
+
+  const [resumePosition, setResumePosition] = useState<ResumePosition>(DEFAULT_SETTINGS.resumePosition);
+
+  const [openNowPlayingOnPlay, setOpenNowPlayingOnPlay] = useState(DEFAULT_SETTINGS.openNowPlayingOnPlay);
+
   const [saveLrcFile, setSaveLrcFile] = useState(DEFAULT_SETTINGS.saveLrcFile);
 
   const [npArtMax, setNpArtMax] = useState(DEFAULT_SETTINGS.npArtMax);
@@ -54,6 +60,9 @@ export function usePreferences() {
     appInfo,
     setTheme,
     setRescanOnStartup,
+    setResumeOnStartup,
+    setResumePosition,
+    setOpenNowPlayingOnPlay,
     setNpArtMax,
     setSaveLrcFile,
     setLyricOffsetStepMs,
@@ -65,6 +74,9 @@ export function usePreferences() {
     autoCheckUpdates,
     theme,
     rescanOnStartup,
+    resumeOnStartup,
+    resumePosition,
+    openNowPlayingOnPlay,
     npArtMax,
     lyricOffsetStepMs,
     settingsOpen,

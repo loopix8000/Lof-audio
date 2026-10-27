@@ -125,6 +125,17 @@ pub(crate) async fn delete_tracks_from_library(
 }
 
 pub(crate) async fn play_track(track_id: i64, state: &AppState) -> Result<PlaybackState, String> {
+    let result = open_track(track_id, false, state).await?;
+    state.db.increment_play_count(track_id)?;
+    Ok(result)
+}
+
+/// 곡을 재생하지 않고 일시정지 상태로 불러온다. 재생 횟수는 늘리지 않는다.
+pub(crate) async fn load_track(track_id: i64, state: &AppState) -> Result<PlaybackState, String> {
+    open_track(track_id, true, state).await
+}
+
+async fn open_track(track_id: i64, paused: bool, state: &AppState) -> Result<PlaybackState, String> {
     let track = state.db.get_public_track(track_id)?;
 
     let (tx, rx) = mpsc::channel();
@@ -132,12 +143,11 @@ pub(crate) async fn play_track(track_id: i64, state: &AppState) -> Result<Playba
         track_id: track.id,
         file_path: track.file_path,
         duration_secs: track.duration_secs,
+        paused,
         reply: tx,
     })?;
 
-    let result = receive_audio(rx).await??;
-    state.db.increment_play_count(track_id)?;
-    Ok(result)
+    receive_audio(rx).await?
 }
 
 pub(crate) async fn pause_playback(state: &AppState) -> Result<PlaybackState, String> {
@@ -192,11 +202,14 @@ pub(crate) async fn get_playback_state(state: &AppState) -> Result<PlaybackState
     receive_audio(rx).await
 }
 
+/// `progress(done, total)` is called after each file is written.
 pub(crate) async fn update_tags(
     input: TagUpdateInput,
     state: &AppState,
+    progress: impl Fn(usize, usize),
 ) -> Result<Vec<Track>, String> {
     let single = input.track_ids.len() == 1;
+    let total = input.track_ids.len();
     for (idx, id) in input.track_ids.iter().enumerate() {
         edit_track(state, *id, input.save_lrc_file, |track| {
             for (value, target) in [
@@ -234,6 +247,7 @@ pub(crate) async fn update_tags(
                 track.cover_data_url = nonempty(Some(cover.clone()));
             }
         })?;
+        progress(idx + 1, total);
     }
     state.db.get_public_tracks(&input.track_ids)
 }
@@ -258,6 +272,7 @@ pub(crate) async fn preview_filename_pattern(
 pub(crate) async fn apply_filename_pattern(
     input: FilenamePatternInput,
     state: &AppState,
+    progress: impl Fn(usize, usize),
 ) -> Result<Vec<Track>, String> {
     let mut parsed = Vec::new();
     for id in &input.track_ids {
@@ -266,7 +281,8 @@ pub(crate) async fn apply_filename_pattern(
             .map_err(|e| format!("{}: {}", track.file_name, e))?;
         parsed.push((*id, fields));
     }
-    for (id, fields) in parsed {
+    let total = parsed.len();
+    for (idx, (id, fields)) in parsed.into_iter().enumerate() {
         edit_track(state, id, false, |track| {
             if let Some(v) = fields.get("title") {
                 track.title = v.clone();
@@ -284,6 +300,7 @@ pub(crate) async fn apply_filename_pattern(
                 track.year = v.parse().ok();
             }
         })?;
+        progress(idx + 1, total);
     }
     state.db.get_public_tracks(&input.track_ids)
 }
@@ -390,10 +407,12 @@ pub(crate) async fn preview_album_metadata(
 pub(crate) async fn apply_confirmed_matches(
     items: Vec<ConfirmTrackMatchItem>,
     state: &AppState,
+    progress: impl Fn(usize, usize),
 ) -> Result<Vec<Track>, String> {
     let save_lrc = state.db.get_setting_bool("saveLrcFile", true);
     let ids: Vec<_> = items.iter().map(|item| item.track_id).collect();
-    for item in items {
+    let total = items.len();
+    for (idx, item) in items.into_iter().enumerate() {
         let cover = if item.apply_cover {
             let release = item
                 .release_id
@@ -440,6 +459,7 @@ pub(crate) async fn apply_confirmed_matches(
                 track.plain_lyrics = Some(v);
             }
         })?;
+        progress(idx + 1, total);
     }
     state.db.get_public_tracks(&ids)
 }

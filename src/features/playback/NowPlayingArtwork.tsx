@@ -86,8 +86,8 @@ export function NowPlayingArtwork() {
       {activeTrack && (
         <div className="np-hero-actions">
           <button
-            className={`ui-btn ${activeTrack.isFavorite ? "solid" : ""
-              }`}
+            className={`ui-btn ${activeTrack.isFavorite ? "solid" : ""}`}
+            aria-pressed={activeTrack.isFavorite}
             onClick={() =>
               handleToggleFavorite(activeTrack.id)
             }
@@ -100,7 +100,7 @@ export function NowPlayingArtwork() {
                   : "none"
               }
             />
-            {activeTrack.isFavorite ? "좋아요 표시됨" : "좋아요"}
+            좋아요
           </button>
           <button
             className="ui-btn"

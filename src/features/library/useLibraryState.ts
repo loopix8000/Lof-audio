@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { Track, Playlist, ScanProgress, Workspace, WorkspaceState, LibrarySnapshot, HiddenItem } from "../../types";
 import { DEFAULT_SETTINGS, FolderViewMode, SortField } from "../../settings";
 import { api, onLibraryScanProgress, onLibraryChanged, onAutomationLibraryChanged } from "../../api";
-import { mergeTrackChanges } from "../../library";
+import { followRenamedCollection, mergeTrackChanges } from "../../library";
 import { NavCategory, ContextMenuState } from "../../app/types";
 import type { NotificationsModel } from "../../app/useNotifications";
 import { useEvent } from "../../useEvent";
@@ -162,7 +162,26 @@ export function useLibraryState({
     setNewPlaylistName("");
   }, [activeWorkspaceId]);
 
+  // Renaming the album/artist being viewed (tag edit, album match) moves the view to the new name.
+  const followedRenameRef = useRef(false);
+  const previousViewRef = useRef({ tracks, activeWorkspaceId });
   useEffect(() => {
+    const previous = previousViewRef.current;
+    previousViewRef.current = { tracks, activeWorkspaceId };
+    if (subFilter === null || previous.activeWorkspaceId !== activeWorkspaceId) return;
+    if (navCategory !== "albums" && navCategory !== "artists") return;
+    const renamed = followRenamedCollection(previous.tracks, tracks, navCategory === "albums" ? "album" : "artist", subFilter);
+    if (renamed === null) return;
+    followedRenameRef.current = true;
+    setSubFilter(renamed);
+  }, [tracks]);
+
+  useEffect(() => {
+    // Following a rename is the same view, so the selection being edited stays.
+    if (followedRenameRef.current) {
+      followedRenameRef.current = false;
+      return;
+    }
     setSelectedIds([]);
     setLastClickedId(null);
   }, [navCategory, subFilter, activePlaylistId, activeWorkspaceId, folderViewMode]);

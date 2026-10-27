@@ -37,7 +37,7 @@ export function useLyricsEditor({
     setLyricsSaving,
   } = lyricsEditorState;
   const { notify } = notifications;
-  const { dialogTracks, refreshEditedTracks } = trackEditor;
+  const { dialogTracks, refreshEditedTracks, runTagWrite } = trackEditor;
   const { saveLrcFile } = preferences;
   const { setTracks } = libraryState;
   const { dialogOpen, setDialogOpen } = trackEditorState;
@@ -139,7 +139,19 @@ export function useLyricsEditor({
     let saved = 0;
     let failed = 0;
     try {
-      for (const track of targets) {
+      await runTagWrite("가사 저장 중", targets.length, step => saveAll(step));
+      if (!isCurrent()) return;
+      if (failed === 0) setDialogOpen(false);
+      notify(failed ? `${saved}곡 저장, ${failed}곡 저장 실패` : `${saved}곡의 가사를 저장했습니다.`);
+    } finally {
+      if (isCurrent()) {
+        lyricsBusy.current = false;
+        setLyricsSaving(false);
+      }
+    }
+
+    async function saveAll(step: (done: number) => void) {
+      for (const [index, track] of targets.entries()) {
         if (!isCurrent()) return;
         const draft = lyricsEntries[track.id].draft;
         try {
@@ -155,14 +167,7 @@ export function useLyricsEditor({
           updateEntry(track.id, { status: `저장 실패: ${error}` });
           await refreshEditedTracks([track.id]);
         }
-      }
-      if (!isCurrent()) return;
-      if (failed === 0) setDialogOpen(false);
-      notify(failed ? `${saved}곡 저장, ${failed}곡 저장 실패` : `${saved}곡의 가사를 저장했습니다.`);
-    } finally {
-      if (isCurrent()) {
-        lyricsBusy.current = false;
-        setLyricsSaving(false);
+        step(index + 1);
       }
     }
   };

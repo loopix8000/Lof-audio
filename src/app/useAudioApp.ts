@@ -11,6 +11,7 @@ import { useSettingsSync } from "../features/settings/useSettingsSync";
 import { useActiveTrack } from "../features/playback/useActiveTrack";
 import { useLibraryActions } from "../features/library/useLibraryActions";
 import { usePlaybackControls } from "../features/playback/usePlaybackControls";
+import { useResumePlayback } from "../features/playback/useResumePlayback";
 import { useTrackEditor } from "../features/track-editor/useTrackEditor";
 import { useMetadataMatching } from "../features/metadata/useMetadataMatching";
 import { useLyricsEditor } from "../features/lyrics/useLyricsEditor";
@@ -61,7 +62,10 @@ export function useAudioApp() {
     notifications,
     libraryState,
     libraryView,
+    windowLayout,
+    preferences,
   });
+  useResumePlayback({ playbackState, libraryState, preferences });
   const trackEditor = useTrackEditor({
     trackEditorState,
     libraryState,

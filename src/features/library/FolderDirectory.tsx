@@ -8,7 +8,7 @@ import { normalizeFolderPath } from "../workspaces/scope";
 export function FolderDirectory() {
   const {
     subFilter, setSubFilter, tableEntries, displayedTracks, directoryFolders, folderLocation,
-    selectedIdSet, playback, handleRowClick, handlePlayTrack, handleRowContextMenu,
+    selectedIdSet, playback, handleRowClick, handlePlayFromLibrary, handleRowContextMenu,
     handleToggleFavorite, setSelectedIds, handleCollectionContextMenu, handleAddFolder, folders,
     activeWorkspaceId,
   } = useAudioAppContext();
@@ -84,7 +84,7 @@ export function FolderDirectory() {
               <td className="t-num folder-explorer-count">{folder.trackCount}곡</td><td />
             </tr>)}
           </tbody>
-          <VirtualTrackTable rows={tableEntries} grouped={false} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={(id, event) => { setSelectedFolder(null); handleRowClick(id, event); }} onPlay={handlePlayTrack} onContext={(track, event) => { setSelectedFolder(null); handleRowContextMenu(track, event); }} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} />
+          <VirtualTrackTable rows={tableEntries} grouped={false} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={(id, event) => { setSelectedFolder(null); handleRowClick(id, event); }} onPlay={handlePlayFromLibrary} onContext={(track, event) => { setSelectedFolder(null); handleRowContextMenu(track, event); }} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} />
         </table>
         {directoryFolders.length === 0 && displayedTracks.length === 0 && <div className="folder-directory-empty">
           <Folder size={32} strokeWidth={1.25} />

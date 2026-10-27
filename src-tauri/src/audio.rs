@@ -318,6 +318,8 @@ pub enum AudioCommand {
         track_id: i64,
         file_path: String,
         duration_secs: f64,
+        /// 곡만 불러오고 일시정지 상태로 둔다.
+        paused: bool,
         reply: Sender<Result<PlaybackState, String>>,
     },
     Pause {
@@ -449,6 +451,7 @@ impl AudioEngine {
                         track_id,
                         file_path,
                         duration_secs,
+                        paused,
                         reply,
                     } => {
                         if stream_handle.is_none() {
@@ -495,15 +498,17 @@ impl AudioEngine {
                                     if let Some(old_sink) = sink.take() {
                                         old_sink.stop();
                                     }
-                                    new_sink.play();
+                                    if !paused {
+                                        new_sink.play();
+                                    }
                                     sink = Some(new_sink);
                                     source_released = Some(released);
 
                                     state.current_track_id = Some(track_id);
                                     state.file_path = Some(file_path);
-                                    state.is_playing = true;
+                                    state.is_playing = !paused;
                                     state.accumulated_secs = 0.0;
-                                    state.started_at = Some(Instant::now());
+                                    state.started_at = (!paused).then(Instant::now);
                                     state.duration_secs = final_dur;
                                     state.has_active_track = true;
                                     state.ended = false;
@@ -787,6 +792,7 @@ mod tests {
                 track_id: 1,
                 file_path: path.to_string_lossy().into_owned(),
                 duration_secs: 4.0,
+                paused: false,
                 reply,
             })
             .unwrap();

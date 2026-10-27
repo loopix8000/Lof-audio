@@ -2,6 +2,7 @@ import { Heart, Edit3, Shuffle, Repeat1, Repeat } from "lucide-react";
 import { formatDuration } from "../../utils/lrc";
 import { DraggableSlider, NativePrevIcon, NativePauseIcon, NativePlayIcon, NativeNextIcon, VolumeControl } from "../../components/TransportControls";
 import { useAudioAppContext } from "../../app/AppContext";
+import { MarqueeText } from "../../components/MarqueeText";
 
 export function CompactDeck() {
   const {
@@ -34,9 +35,9 @@ export function CompactDeck() {
       <img className="pm-cover" src={activeCover} alt="" onContextMenu={(e) => activeTrack && handleRowContextMenu(activeTrack, e)} />
       <div className="pm-meta">
         <div className="pm-title-row">
-          <div className="pm-title" title={activeTrack?.title}>
+          <MarqueeText className="pm-title" title={activeTrack?.title}>
             {activeTrack?.title || "재생 중인 곡 없음"}
-          </div>
+          </MarqueeText>
           <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
             {activeTrack && (
               <button
@@ -71,7 +72,7 @@ export function CompactDeck() {
           </div>
         </div>
 
-        <div
+        <MarqueeText
           className="pm-artist clickable"
           title={
             activeTrack?.artist
@@ -87,7 +88,7 @@ export function CompactDeck() {
           }}
         >
           {activeTrack?.artist || "트랙을 추가해 주세요"}
-        </div>
+        </MarqueeText>
 
         <div
           className="pm-submeta"

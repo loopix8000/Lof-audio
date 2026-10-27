@@ -1,4 +1,4 @@
-import { Edit3, EyeOff, Play, Search, Trash2, Unlink } from "lucide-react";
+import { Edit3, EyeOff, ListEnd, ListStart, Play, Search, Trash2, Unlink } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import { api } from "../../api";
 import { useAudioAppContext } from "../../app/AppContext";
@@ -8,8 +8,8 @@ export function CollectionContextMenu() {
   const {
     collectionContextMenu: menu, setCollectionContextMenu, handleHideItems, visibilityBusy,
     tracks, playlists, folders, activeWorkspaceId, applySnapshot, setSelectedIds,
-    handlePlayTrack, openPropertiesDialog, openAlbumMatchDialog, handleRemoveFolder,
-    handleDeletePlaylist, notify,
+    handlePlayFromLibrary, openPropertiesDialog, openAlbumMatchDialog, handleRemoveFolder,
+    handleDeletePlaylist, notify, handleQueueTracks,
   } = useAudioAppContext();
   const menuRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -54,8 +54,14 @@ export function CollectionContextMenu() {
 
   return (
     <div ref={menuRef} className="native-menu native-menu--compact" style={{ left: menu.x, top: menu.y }} onClick={event => event.stopPropagation()}>
-      <button className="native-menu-item" disabled={targetIds.length === 0} onClick={() => { close(); void handlePlayTrack(targetIds[0]); }}>
+      <button className="native-menu-item" disabled={targetIds.length === 0} onClick={() => { close(); void handlePlayFromLibrary(targetIds[0]); }}>
         <Play size={13} aria-hidden="true" /><span>첫 곡 재생</span>
+      </button>
+      <button className="native-menu-item" disabled={targetIds.length === 0} onClick={() => { close(); handleQueueTracks(targetIds, true); }}>
+        <ListStart size={13} aria-hidden="true" /><span>다음에 재생 ({targetIds.length}곡)</span>
+      </button>
+      <button className="native-menu-item" disabled={targetIds.length === 0} onClick={() => { close(); handleQueueTracks(targetIds, false); }}>
+        <ListEnd size={13} aria-hidden="true" /><span>재생 대기열에 추가 ({targetIds.length}곡)</span>
       </button>
       <button className="native-menu-item" disabled={targetIds.length === 0} onClick={() => { close(); openPropertiesDialog("tags", targetIds); }}>
         <Edit3 size={13} aria-hidden="true" /><span>속성·태그 편집 ({targetIds.length}곡)…</span>

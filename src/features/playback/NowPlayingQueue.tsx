@@ -1,6 +1,8 @@
-import { VirtualQueue } from "../../components/TrackRows";
+import { UpNextList, VirtualQueue } from "../../components/TrackRows";
 import { useAudioAppContext } from "../../app/AppContext";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { Track } from "../../types";
+import type { QueueKind } from "./usePlaybackControls";
 
 export function NowPlayingQueue() {
   const {
@@ -10,7 +12,27 @@ export function NowPlayingQueue() {
     handleRowContextMenu,
     npQueueWidth,
     setNpQueueWidth,
+    tracks,
+    upNext,
+    queueTail,
+    handlePlayQueued,
+    handleRemoveFromQueue,
+    handleClearQueue,
+    handleMoveInQueue,
   } = useAudioAppContext();
+  // Both queues are pruned to library tracks, so these stay index-aligned with them.
+  const byId = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
+  const upNextTracks = useMemo(() => upNext.flatMap(id => byId.get(id) ?? []), [byId, upNext]);
+  const tailTracks = useMemo(() => queueTail.flatMap(id => byId.get(id) ?? []), [byId, queueTail]);
+  const queueSection = (kind: QueueKind, label: string, list: Track[]) => list.length > 0 && (
+    <section className={`np-upnext np-upnext--${kind}`} aria-label={label}>
+      <div className="np-upnext-head">
+        <span>{label} · {list.length}곡</span>
+        <button type="button" className="np-text-btn" onClick={() => handleClearQueue(kind)}>비우기</button>
+      </div>
+      <UpNextList tracks={list} onPlay={index => void handlePlayQueued(kind, index)} onRemove={index => handleRemoveFromQueue(kind, index)} onMove={(from, to) => handleMoveInQueue(kind, from, to)} onContext={handleRowContextMenu} />
+    </section>
+  );
   const drag = useRef<{ x: number; width: number; pointerId: number } | null>(null);
   const [resizing, setResizing] = useState(false);
   return (<div className="np-queue-pane">
@@ -55,6 +77,11 @@ export function NowPlayingQueue() {
       </span>
     </div>
 
+    {queueSection("next", "다음에 재생", upNextTracks)}
+
     <VirtualQueue tracks={displayedTracks} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onPlay={handlePlayTrack} onContext={handleRowContextMenu} />
+
+    {/* Played after the list above runs out */}
+    {queueSection("tail", "대기열 끝에 추가", tailTracks)}
   </div>);
 }

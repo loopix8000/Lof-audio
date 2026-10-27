@@ -30,6 +30,11 @@ export function usePlaybackState() {
 
   const [prevVolume, setPrevVolume] = useState(0.85);
 
+  // User-queued tracks (duplicates allowed): `upNext` plays right after the current track,
+  // `queueTail` after the current list runs out ("재생 대기열에 추가").
+  const [upNext, setUpNext] = useState<number[]>([]);
+  const [queueTail, setQueueTail] = useState<number[]>([]);
+
   useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -71,6 +76,10 @@ export function usePlaybackState() {
     prevVolume,
     setShuffle,
     setRepeatMode,
+    upNext,
+    setUpNext,
+    queueTail,
+    setQueueTail,
   };
 }
 

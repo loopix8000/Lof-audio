@@ -27,7 +27,7 @@ export function LibraryBrowser() {
     setShowRightLyricsInLib,
     handleAddFolder,
     handleAddFiles,
-    handlePlayTrack,
+    handlePlayFromLibrary,
     setSelectedIds,
     tableEntries,
     albumGroupCount,
@@ -213,7 +213,7 @@ export function LibraryBrowser() {
             }}
             onDoubleClick={() => {
               setSubFilter(card.artist);
-              if (card.tracks[0]) handlePlayTrack(card.tracks[0].id);
+              if (card.tracks[0]) handlePlayFromLibrary(card.tracks[0].id);
             }}
           >
             <div className="album-card-cover">
@@ -240,7 +240,7 @@ export function LibraryBrowser() {
             }}
             onDoubleClick={() => {
               setSubFilter(card.album);
-              if (card.tracks[0]) handlePlayTrack(card.tracks[0].id);
+              if (card.tracks[0]) handlePlayFromLibrary(card.tracks[0].id);
             }}
           >
             <div className="album-card-cover">
@@ -267,7 +267,7 @@ export function LibraryBrowser() {
             }}
             onDoubleClick={() => {
               setSubFilter(card.folderPath);
-              if (card.tracks[0]) handlePlayTrack(card.tracks[0].id);
+              if (card.tracks[0]) handlePlayFromLibrary(card.tracks[0].id);
             }}
           >
             <div className="album-card-cover">
@@ -299,7 +299,7 @@ export function LibraryBrowser() {
       >
         <table className="track-grid">
           <TrackTableHeader />
-          <VirtualTrackTable onAlbumContext={(group, event) => handleCollectionContextMenu({ kind: "album", value: group.album || "Unknown Album", label: group.album || "Unknown Album" }, event, group.tracks.map(track => track.id))} onFolderContext={(group, event) => handleCollectionContextMenu({ kind: "folder", value: group.path, label: group.name }, event, group.tracks.map(track => track.id))} rows={tableEntries} grouped={grouped} showTrackCovers={effectiveLibView === "folder-category" || !grouped} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={(id, event) => handleRowClick(id, event, grouped ? visibleGroupedTrackIds : undefined)} onPlay={handlePlayTrack} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} onToggleAlbum={toggleAlbumGroup} onToggleFolder={toggleFolderGroup} />
+          <VirtualTrackTable onAlbumContext={(group, event) => handleCollectionContextMenu({ kind: "album", value: group.album || "Unknown Album", label: group.album || "Unknown Album" }, event, group.tracks.map(track => track.id))} onFolderContext={(group, event) => handleCollectionContextMenu({ kind: "folder", value: group.path, label: group.name }, event, group.tracks.map(track => track.id))} rows={tableEntries} grouped={grouped} showTrackCovers={effectiveLibView === "folder-category" || !grouped} selected={selectedIdSet} currentId={playback.currentTrackId} isPlaying={playback.isPlaying} onSelect={(id, event) => handleRowClick(id, event, grouped ? visibleGroupedTrackIds : undefined)} onPlay={handlePlayFromLibrary} onContext={handleRowContextMenu} onFavorite={handleToggleFavorite} onSelectAlbum={setSelectedIds} onToggleAlbum={toggleAlbumGroup} onToggleFolder={toggleFolderGroup} />
         </table>
       </div>
     )}

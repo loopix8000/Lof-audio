@@ -1,5 +1,5 @@
 import React, { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Folder, Heart } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, Heart, X } from "lucide-react";
 import { Track } from "../types";
 import { formatDuration, getFallbackCoverUrl } from "../utils/lrc";
 
@@ -142,6 +142,54 @@ const QueueRow = memo(function QueueRow({ track: t, index, active, playing, onPl
     <div className="np-queue-meta"><div className="np-queue-title" title={t.title}>{t.title}</div><div className="np-queue-sub" title={`${t.artist} · ${t.album}`}>{t.artist}</div></div>
     <div className="np-queue-dur">{formatDuration(t.durationSecs)}</div>
   </div></div>;
+});
+/** Tracks the user queued; short, so not virtualised. Rows are addressed by index (duplicates allowed).
+ *  Rows reorder by pointer drag (not HTML5 drag-and-drop, which the Tauri webview's file drop can swallow):
+ *  the grabbed row follows the pointer, the rows it passes shift by one slot, and the move commits on release. */
+export const UpNextList = memo(function UpNextList(p: { tracks: Track[]; onPlay: (index: number) => void; onRemove: (index: number) => void; onMove: (from: number, to: number) => void; onContext: RowProps["onContext"] }) {
+  const [drag, setDrag] = useState<{ from: number; dy: number; step: number } | null>(null);
+  const press = useRef<{ index: number; y: number; step: number; pointerId: number } | null>(null);
+  const moved = useRef(false);
+  const target = drag ? Math.max(0, Math.min(p.tracks.length - 1, drag.from + Math.round(drag.dy / drag.step))) : -1;
+  const offset = (i: number) => {
+    if (!drag) return 0;
+    if (i === drag.from) return drag.dy;
+    if (drag.from < target && i > drag.from && i <= target) return -drag.step;
+    if (drag.from > target && i >= target && i < drag.from) return drag.step;
+    return 0;
+  };
+  return <div className={`np-upnext-list ${drag ? "dragging" : ""}`}>{p.tracks.map((t, index) => <div key={`${index}-${t.id}`}
+    className={`np-queue-item ${drag?.from === index ? "drag-source" : ""}`}
+    style={drag ? { transform: `translateY(${offset(index)}px)` } : undefined}
+    onPointerDown={e => {
+      if (e.button !== 0) return;
+      // Row height plus the list's 2px gap: the distance one slot moves
+      press.current = { index, y: e.clientY, step: e.currentTarget.getBoundingClientRect().height + 2, pointerId: e.pointerId };
+      moved.current = false;
+    }}
+    onPointerMove={e => {
+      const start = press.current;
+      if (!start || start.pointerId !== e.pointerId) return;
+      const dy = e.clientY - start.y;
+      if (!drag && Math.abs(dy) < 4) return; // still a click
+      if (!drag) e.currentTarget.setPointerCapture(e.pointerId);
+      moved.current = true;
+      setDrag({ from: start.index, dy, step: start.step });
+    }}
+    onPointerUp={() => {
+      press.current = null;
+      if (!drag) return;
+      if (target !== drag.from) p.onMove(drag.from, target);
+      setDrag(null);
+    }}
+    onPointerCancel={() => { press.current = null; setDrag(null); }}
+    onClick={() => { if (moved.current) moved.current = false; else p.onPlay(index); }}
+    onContextMenu={e => p.onContext(t, e)}>
+    <div className="np-queue-num">{index + 1}</div>
+    <img className="np-queue-thumb" src={t.coverDataUrl || getFallbackCoverUrl(t.title, t.artist)} alt="" loading="lazy" draggable={false} />
+    <div className="np-queue-meta"><div className="np-queue-title" title={t.title}>{t.title}</div><div className="np-queue-sub" title={`${t.artist} · ${t.album}`}>{t.artist}</div></div>
+    <button type="button" className="np-upnext-remove" title="대기열에서 빼기" aria-label={`${t.title} 대기열에서 빼기`} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); p.onRemove(index); }}><X size={13} /></button>
+  </div>)}</div>;
 });
 export const VirtualQueue = memo(function VirtualQueue(p: Pick<ListProps, "currentId" | "isPlaying" | "onPlay" | "onContext"> & { tracks: Track[] }) {
   const scroll = useRef<HTMLDivElement>(null), body = useRef<HTMLDivElement>(null);

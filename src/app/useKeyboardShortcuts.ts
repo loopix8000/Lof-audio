@@ -39,7 +39,7 @@ export function useKeyboardShortcuts({
   const { settingsOpen, setSettingsOpen } = preferences;
   const { dialogOpen, setDialogOpen } = trackEditorState;
   const { appMode, nowPlayingOpen, setNowPlayingOpen } = windowLayout;
-  const { handleTogglePlay, handlePlayTrack, handleSeek } = playbackControls;
+  const { handleTogglePlay, handlePlayFromLibrary, handleSeek } = playbackControls;
   const { openPropertiesDialog } = trackEditor;
   const { selectedIds, setSelectedIds } = libraryState;
   const { displayedTracks, effectiveLibView, visibleGroupedTrackIds } = libraryView;
@@ -77,7 +77,7 @@ export function useKeyboardShortcuts({
         openPropertiesDialog("tags");
       } else if (e.code === "Enter" && selectedIds.length > 0) {
         e.preventDefault();
-        handlePlayTrack(selectedIds[0]);
+        handlePlayFromLibrary(selectedIds[0]);
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
         e.preventDefault();
         setSelectedIds(appMode === "library" && !nowPlayingOpen && (effectiveLibView === "grouped" || effectiveLibView === "folder-category")

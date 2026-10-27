@@ -32,6 +32,9 @@ export function useSettingsSync({
     appInfo,
     setTheme,
     setRescanOnStartup,
+    setResumeOnStartup,
+    setResumePosition,
+    setOpenNowPlayingOnPlay,
     setNpArtMax,
     setSaveLrcFile,
     setLyricOffsetStepMs,
@@ -43,6 +46,9 @@ export function useSettingsSync({
     autoCheckUpdates,
     theme,
     rescanOnStartup,
+    resumeOnStartup,
+    resumePosition,
+    openNowPlayingOnPlay,
     npArtMax,
     saveLrcFile,
     lyricOffsetStepMs,
@@ -111,6 +117,9 @@ export function useSettingsSync({
         setRescanOnStartup(st.rescanOnStartup);
         setShuffle(st.shuffle);
         setRepeatMode(st.repeatMode);
+        setResumeOnStartup(st.resumeOnStartup);
+        setResumePosition(st.resumePosition);
+        setOpenNowPlayingOnPlay(st.openNowPlayingOnPlay);
         setNpArtMax(st.npArtMax);
         setShowLeftSidebar(st.showLeftSidebar);
         setShowRightLyricsInLib(st.showRightLyricsInLib);
@@ -162,6 +171,9 @@ export function useSettingsSync({
       muted: isMuted,
       shuffle,
       repeatMode,
+      resumeOnStartup,
+      resumePosition,
+      openNowPlayingOnPlay,
       npArtMax,
       showLeftSidebar,
       showRightLyricsInLib,
@@ -187,7 +199,7 @@ export function useSettingsSync({
     [
       updateChannel, autoCheckUpdates,
       theme, alwaysOnTop, rescanOnStartup, isMuted, prevVolume, playback.volume, shuffle,
-      repeatMode, npArtMax, showLeftSidebar, showRightLyricsInLib, lyricsPaneWidth,
+      repeatMode, resumeOnStartup, resumePosition, openNowPlayingOnPlay, npArtMax, showLeftSidebar, showRightLyricsInLib, lyricsPaneWidth,
       npHeroRatio, npQueueWidth, colWidths, sortField, sortAsc, folderViewMode, saveLrcFile, applyFieldTitle,
       applyFieldArtist, applyFieldAlbum, applyFieldCover, applyFieldLyrics, lyricOffsetStepMs,
     ],

@@ -99,7 +99,6 @@ export function NowPlayingLyrics() {
               }`}
             onClick={() => handleSeek(line.timeSecs)}
             aria-current={idx === activeLyricIdx ? "true" : undefined}
-            title="이 가사부터 재생"
           >
             {line.text}
           </button>

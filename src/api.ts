@@ -120,6 +120,12 @@ export async function onLibraryChanged(handler: (trackIds: number[]) => void): P
   return listen<number[]>("library-changed", event => handler(event.payload));
 }
 
+/** (done, total) files written while a tag save, pattern apply or match apply runs. */
+export async function onTagWriteProgress(handler: (done: number, total: number) => void): Promise<UnlistenFn> {
+  if (!isTauri()) return () => {};
+  return listen<[number, number]>("tag-write-progress", event => handler(...event.payload));
+}
+
 export async function onAutomationLibraryChanged(handler: () => void): Promise<UnlistenFn> {
   if (!isTauri()) return () => {};
   return listen("automation-library-changed", handler);
@@ -192,6 +198,10 @@ export const api = {
 
   playTrack: (trackId: number): Promise<PlaybackState> =>
     invoke("play_track", { trackId }),
+
+  /** Opens a track paused at 0 without counting a play. */
+  loadTrack: (trackId: number): Promise<PlaybackState> =>
+    invoke("load_track", { trackId }),
 
   pausePlayback: (): Promise<PlaybackState> =>
     invoke("pause_playback"),

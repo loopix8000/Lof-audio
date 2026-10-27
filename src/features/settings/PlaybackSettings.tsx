@@ -1,5 +1,5 @@
 import { RepeatMode } from "../../types";
-import { NP_ART_MAX_RANGE } from "../../settings";
+import { NP_ART_MAX_RANGE, ResumePosition } from "../../settings";
 import { useAudioAppContext } from "../../app/AppContext";
 import { Select } from "../../components/Select";
 
@@ -15,6 +15,12 @@ export function PlaybackSettings() {
     setRepeatMode,
     npArtMax,
     setNpArtMax,
+    resumeOnStartup,
+    setResumeOnStartup,
+    resumePosition,
+    setResumePosition,
+    openNowPlayingOnPlay,
+    setOpenNowPlayingOnPlay,
   } = useAudioAppContext();
   return (settingsTab === "playback" && (
     <>
@@ -40,6 +46,51 @@ export function PlaybackSettings() {
           </span>
         </div>
       </div>
+      <label className="settings-row">
+        <div className="settings-row-text">
+          <span className="settings-row-title">시작할 때 마지막 곡 불러오기</span>
+          <span className="settings-row-desc">
+            앱을 다시 열면 마지막으로 듣던 곡을 일시정지 상태로 준비합니다.
+          </span>
+        </div>
+        <input
+          type="checkbox"
+          checked={resumeOnStartup}
+          onChange={(e) => setResumeOnStartup(e.target.checked)}
+        />
+      </label>
+      <div className="settings-row">
+        <div className="settings-row-text">
+          <span className="settings-row-title">불러온 곡 위치</span>
+          <span className="settings-row-desc">
+            재생을 누르면 처음부터 들을지, 멈춘 위치부터 이어서 들을지 정합니다.
+          </span>
+        </div>
+        <Select
+          aria-label="불러온 곡 위치"
+          className="settings-control"
+          value={resumePosition}
+          disabled={!resumeOnStartup}
+          onChange={value => setResumePosition(value as ResumePosition)}
+          options={[
+            { value: "start", label: "처음부터" },
+            { value: "last", label: "멈춘 위치부터" },
+          ]}
+        />
+      </div>
+      <label className="settings-row">
+        <div className="settings-row-text">
+          <span className="settings-row-title">재생할 때 재생 화면 열기</span>
+          <span className="settings-row-desc">
+            보관함에서 곡을 재생하면 재생 화면으로 바로 전환합니다.
+          </span>
+        </div>
+        <input
+          type="checkbox"
+          checked={openNowPlayingOnPlay}
+          onChange={(e) => setOpenNowPlayingOnPlay(e.target.checked)}
+        />
+      </label>
       <label className="settings-row">
         <div className="settings-row-text">
           <span className="settings-row-title">셔플</span>

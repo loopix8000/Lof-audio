@@ -46,7 +46,7 @@ export function useMetadataMatching({
   } = metadataState;
   const { dialogTrackIds, dialogOpen, setDialogOpen } = trackEditorState;
   const { notify } = notifications;
-  const { dialogPrimaryTrack, refreshEditedTracks } = trackEditor;
+  const { dialogPrimaryTrack, refreshEditedTracks, runTagWrite } = trackEditor;
   const { setTracks } = libraryState;
   useEffect(() => {
     if (!dialogOpen) {
@@ -239,7 +239,7 @@ export function useMetadataMatching({
 
     setMatchLoading(true);
     try {
-      const updated = await api.applyConfirmedMatches(items);
+      const updated = await runTagWrite("매칭 정보 적용 중", items.length, () => api.applyConfirmedMatches(items));
       setTracks(previous => mergeTrackChanges(previous, updated.map(t => t.id), updated));
       setDialogOpen(false);
       notify(`${items.length}곡의 선택한 매칭 정보가 적용되었습니다.`);

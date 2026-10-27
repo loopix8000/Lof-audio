@@ -22,6 +22,9 @@ export interface MatchApplyFields {
   lyrics: boolean;
 }
 
+/** Where the track restored on startup is positioned: its beginning, or where it was left. */
+export type ResumePosition = "start" | "last";
+
 /** User preferences persisted in the library SQLite DB (settings table, one JSON value per key). */
 export interface AppSettings {
   // General
@@ -33,6 +36,9 @@ export interface AppSettings {
   muted: boolean;
   shuffle: boolean;
   repeatMode: RepeatMode;
+  resumeOnStartup: boolean;
+  resumePosition: ResumePosition;
+  openNowPlayingOnPlay: boolean;
   npArtMax: number;
   // Layout
   showLeftSidebar: boolean;
@@ -61,6 +67,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   muted: false,
   shuffle: false,
   repeatMode: "all",
+  resumeOnStartup: true,
+  resumePosition: "start",
+  openNowPlayingOnPlay: true,
   npArtMax: 480,
   showLeftSidebar: true,
   showRightLyricsInLib: true,
@@ -112,6 +121,9 @@ export function normalizeSettings(raw: Record<string, unknown>): AppSettings {
     muted: pick(raw.muted, d.muted, isBool),
     shuffle: pick(raw.shuffle, d.shuffle, isBool),
     repeatMode: pick(raw.repeatMode, d.repeatMode, (v) => v === "off" || v === "all" || v === "one"),
+    resumeOnStartup: pick(raw.resumeOnStartup, d.resumeOnStartup, isBool),
+    resumePosition: pick(raw.resumePosition, d.resumePosition, (v) => v === "start" || v === "last"),
+    openNowPlayingOnPlay: pick(raw.openNowPlayingOnPlay, d.openNowPlayingOnPlay, isBool),
     npArtMax: clamp(
       pick(raw.npArtMax, d.npArtMax, isNum),
       NP_ART_MAX_RANGE.min,
@@ -136,6 +148,22 @@ export function normalizeSettings(raw: Record<string, unknown>): AppSettings {
     updateChannel: pick(raw.updateChannel, d.updateChannel, (v) => v === "stable" || v === "beta"),
     autoCheckUpdates: pick(raw.autoCheckUpdates, d.autoCheckUpdates, isBool),
   };
+}
+
+/** Last track and position, stored under its own settings key so frequent position saves
+ *  don't go through (and keep postponing) the debounced AppSettings save. */
+export interface LastPlayback {
+  trackId: number;
+  positionSecs: number;
+}
+
+export const LAST_PLAYBACK_KEY = "lastPlayback";
+
+export function normalizeLastPlayback(raw: unknown): LastPlayback | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { trackId, positionSecs } = raw as Record<string, unknown>;
+  if (!Number.isInteger(trackId) || !isNum(positionSecs)) return null;
+  return { trackId: trackId as number, positionSecs: Math.max(0, positionSecs as number) };
 }
 
 export function formatOffsetStep(ms: number): string {

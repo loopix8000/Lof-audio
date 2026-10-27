@@ -7,6 +7,7 @@ import { TrackContextMenu } from "./features/library/TrackContextMenu";
 import { CollectionContextMenu } from "./features/library/CollectionContextMenu";
 import { TrackPropertiesDialog } from "./features/track-editor/TrackPropertiesDialog";
 import { SettingsDialog } from "./features/settings/SettingsDialog";
+import { TagProgressModal } from "./features/track-editor/TagProgressModal";
 import { CoverPreview } from "./features/metadata/CoverPreview";
 import { StatusToast } from "./app/StatusToast";
 
@@ -21,6 +22,7 @@ export function App() {
         <TrackContextMenu />
         <CollectionContextMenu />
         <TrackPropertiesDialog />
+        <TagProgressModal />
         <SettingsDialog />
         <CoverPreview />
         <StatusToast />

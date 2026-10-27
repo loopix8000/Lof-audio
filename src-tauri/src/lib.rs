@@ -241,6 +241,11 @@ async fn play_track(track_id: i64, state: State<'_, AppState>) -> Result<Playbac
 }
 
 #[tauri::command]
+async fn load_track(track_id: i64, state: State<'_, AppState>) -> Result<PlaybackState, String> {
+    operations::load_track(track_id, &state).await
+}
+
+#[tauri::command]
 async fn pause_playback(state: State<'_, AppState>) -> Result<PlaybackState, String> {
     operations::pause_playback(&state).await
 }
@@ -282,8 +287,9 @@ async fn get_playback_state(state: State<'_, AppState>) -> Result<PlaybackState,
 async fn update_tags(
     input: TagUpdateInput,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<Vec<Track>, String> {
-    operations::update_tags(input, &state).await
+    operations::update_tags(input, &state, tag_write_progress(&app)).await
 }
 
 #[tauri::command]
@@ -298,8 +304,9 @@ async fn preview_filename_pattern(
 async fn apply_filename_pattern(
     input: FilenamePatternInput,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<Vec<Track>, String> {
-    operations::apply_filename_pattern(input, &state).await
+    operations::apply_filename_pattern(input, &state, tag_write_progress(&app)).await
 }
 
 #[tauri::command]
@@ -372,8 +379,16 @@ async fn preview_album_metadata(
 async fn apply_confirmed_matches(
     items: Vec<ConfirmTrackMatchItem>,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<Vec<Track>, String> {
-    operations::apply_confirmed_matches(items, &state).await
+    operations::apply_confirmed_matches(items, &state, tag_write_progress(&app)).await
+}
+
+/// 여러 곡의 태그를 쓰는 동안 (완료, 전체) 곡 수를 화면에 알린다.
+fn tag_write_progress(app: &tauri::AppHandle) -> impl Fn(usize, usize) + '_ {
+    move |done, total| {
+        let _ = tauri::Emitter::emit(app, "tag-write-progress", (done, total));
+    }
 }
 
 #[tauri::command]
@@ -524,6 +539,7 @@ pub fn run() {
             remove_folder,
             delete_tracks_from_library,
             play_track,
+            load_track,
             pause_playback,
             resume_playback,
             stop_playback,

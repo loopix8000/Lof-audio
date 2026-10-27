@@ -14,7 +14,7 @@ export function CollectionBrowser() {
     setNavCategory,
     setSubFilter,
     setShowPlayerBrowser,
-    handlePlayTrack,
+    handlePlayFromLibrary,
     tracks,
     libraryCounts,
     playlists,
@@ -88,7 +88,7 @@ export function CollectionBrowser() {
                   setSubFilter(alb.album);
                   setShowPlayerBrowser(false);
                   if (alb.tracks[0]) {
-                    handlePlayTrack(alb.tracks[0].id);
+                    handlePlayFromLibrary(alb.tracks[0].id);
                   }
                 }}
               >
@@ -210,7 +210,7 @@ export function CollectionBrowser() {
                   setSubFilter(art.artist);
                   setShowPlayerBrowser(false);
                   if (art.tracks[0]) {
-                    handlePlayTrack(art.tracks[0].id);
+                    handlePlayFromLibrary(art.tracks[0].id);
                   }
                 }}
               >
@@ -263,7 +263,7 @@ export function CollectionBrowser() {
                   setSubFilter(fld.folderPath);
                   setShowPlayerBrowser(false);
                   if (fld.tracks[0]) {
-                    handlePlayTrack(fld.tracks[0].id);
+                    handlePlayFromLibrary(fld.tracks[0].id);
                   }
                 }}
               >

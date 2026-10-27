@@ -41,7 +41,7 @@ function editor(api) {
   const messages = [], refreshed = [];
   const inputs = {
     lyricsEditorState: state,
-    trackEditor: { dialogTracks: tracks, refreshEditedTracks: async ids => refreshed.push(...ids) },
+    trackEditor: { dialogTracks: tracks, refreshEditedTracks: async ids => refreshed.push(...ids), runTagWrite: (_title, _total, task) => task(() => {}) },
     preferences: { saveLrcFile: true },
     libraryState: { tracks, setTracks: update => { inputs.libraryState.tracks = update(inputs.libraryState.tracks); } },
     trackEditorState: { dialogOpen: true, setDialogOpen: open => { inputs.trackEditorState.dialogOpen = open; } },
