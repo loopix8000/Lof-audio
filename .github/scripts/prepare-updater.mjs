@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const publicKey = process.env.TAURI_UPDATER_PUBLIC_KEY?.trim();
 // 앱은 채널별 주소를 직접 지정하므로 이 값은 기본 주소로만 쓰인다.
-const endpoint = "https://github.com/loopix8000/Lof-audio/releases/download/beta/latest.json";
+const endpoint = "https://github.com/loopix8000/Lof-audio/releases/download/stable/latest.json";
 if (!publicKey) {
   throw new Error("TAURI_UPDATER_PUBLIC_KEY를 설정하세요.");
 }

@@ -25,8 +25,9 @@ export function LyricsEditorTab() {
   return (dialogTab === "lyrics" && (
     <>
       <div className="modal-content">
+        <div className="editor-section-heading"><div><h2>가사 편집</h2><p>가사 후보를 불러오거나 직접 수정한 뒤 저장하세요.</p></div></div>
         {dialogTracks.length > 1 && (
-          <div style={{ display: "flex", gap: 6 }}>
+          <div className="lyrics-editor-controls">
             <Select
               aria-label="가사 편집할 곡"
               value={lyricsEditingTrackId ?? ""}
@@ -45,9 +46,10 @@ export function LyricsEditorTab() {
             </button>
           </div>
         )}
-        <div style={{ display: "flex", gap: 6 }}>
+        <div className="lyrics-editor-controls">
           <input
             className="form-field"
+            aria-label="가사 검색어"
             value={lrcSearchQuery}
             disabled={lrcLoading || lyricsSaving}
             onChange={(e) => setLrcSearchQuery(e.target.value)}
@@ -139,6 +141,7 @@ export function LyricsEditorTab() {
 
         <textarea
           className="form-textarea lyrics-editor-textarea"
+          aria-label="가사 내용"
           placeholder="일반 가사 또는 [00:12.34] 형식의 LRC 가사 입력..."
           value={lyricDraft}
           onChange={(e) => setLyricDraft(e.target.value)}

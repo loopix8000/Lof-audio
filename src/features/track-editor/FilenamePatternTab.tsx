@@ -15,9 +15,11 @@ export function FilenamePatternTab() {
   return (dialogTab === "pattern" && (
     <>
       <div className="modal-content">
+        <div className="editor-section-heading"><div><h2>파일명 규칙</h2><p>규칙을 선택하거나 입력한 뒤 추출 결과를 확인하세요.</p></div></div>
         <div className="form-grid">
-          <label className="form-label">추출 규칙</label>
+          <label className="form-label" htmlFor="filename-pattern">추출 규칙</label>
           <input
+            id="filename-pattern"
             className="form-field"
             value={filenamePattern}
             onChange={(e) => setFilenamePattern(e.target.value)}

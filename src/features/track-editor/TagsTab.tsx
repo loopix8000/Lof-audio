@@ -23,6 +23,7 @@ export function TagsTab() {
     tagGenre,
     setTagGenre,
     tagCoverUrl,
+    setTagCoverUrl,
     dialogPrimaryTrack,
     coverFileInputRef,
     handleCoverUpload,
@@ -31,12 +32,20 @@ export function TagsTab() {
   } = useAudioAppContext();
   return (dialogTab === "tags" && (
     <>
-      <div className="modal-content">
-        <div className="form-grid">
+      <div className="modal-content tag-editor-content">
+        <div className="editor-section-heading">
+          <div>
+            <h2>기본 정보</h2>
+            <p>{dialogTrackIds.length > 1 ? "입력한 값은 선택한 모든 곡에 적용됩니다. 빈 항목은 기존 값이 유지됩니다." : "곡의 태그와 앨범 커버를 수정합니다."}</p>
+          </div>
+        </div>
+        <div className="tag-editor-layout">
+        <div className="form-grid tag-editor-fields">
           {dialogTrackIds.length <= 1 && (
             <>
-              <label className="form-label">제목</label>
+              <label className="form-label" htmlFor="tag-title">제목</label>
               <input
+                id="tag-title"
                 className="form-field"
                 value={tagTitle}
                 onChange={(e) => setTagTitle(e.target.value)}
@@ -44,8 +53,9 @@ export function TagsTab() {
             </>
           )}
 
-          <label className="form-label">아티스트</label>
+          <label className="form-label" htmlFor="tag-artist">아티스트</label>
           <input
+            id="tag-artist"
             className="form-field"
             placeholder={
               dialogTrackIds.length > 1
@@ -56,8 +66,9 @@ export function TagsTab() {
             onChange={(e) => setTagArtist(e.target.value)}
           />
 
-          <label className="form-label">앨범</label>
+          <label className="form-label" htmlFor="tag-album">앨범</label>
           <input
+            id="tag-album"
             className="form-field"
             placeholder={
               dialogTrackIds.length > 1
@@ -68,9 +79,11 @@ export function TagsTab() {
             onChange={(e) => setTagAlbum(e.target.value)}
           />
 
-          <label className="form-label">앨범 아티스트</label>
+          <label className="form-label" htmlFor="tag-album-artist">앨범 아티스트</label>
           <input
+            id="tag-album-artist"
             className="form-field"
+            placeholder={dialogTrackIds.length > 1 ? "빈칸은 기존 값 유지" : ""}
             value={tagAlbumArtist}
             onChange={(e) => setTagAlbumArtist(e.target.value)}
           />
@@ -89,6 +102,7 @@ export function TagsTab() {
               style={{ width: 72 }}
               type="number"
               placeholder="번호"
+              aria-label="트랙 번호"
               disabled={tagAutoNumber}
               value={tagTrackNum}
               onChange={(e) => setTagTrackNum(e.target.value)}
@@ -98,6 +112,7 @@ export function TagsTab() {
               style={{ width: 84 }}
               type="number"
               placeholder="연도"
+              aria-label="발매 연도"
               value={tagYear}
               onChange={(e) => setTagYear(e.target.value)}
             />
@@ -121,20 +136,20 @@ export function TagsTab() {
             )}
           </div>
 
-          <label className="form-label">장르</label>
+          <label className="form-label" htmlFor="tag-genre">장르</label>
           <input
+            id="tag-genre"
             className="form-field"
+            placeholder={dialogTrackIds.length > 1 ? "빈칸은 기존 값 유지" : ""}
             value={tagGenre}
             onChange={(e) => setTagGenre(e.target.value)}
           />
 
-          <label className="form-label">앨범 커버</label>
-          <div
-            style={{ display: "flex", alignItems: "center", gap: 10 }}
-          >
+        </div>
+          <div className="tag-cover-panel">
+            <span className="form-label">앨범 커버</span>
             <img
-              className="t-row-thumb"
-              style={{ width: 36, height: 36, borderRadius: 6 }}
+              className="tag-cover-image"
               src={
                 tagCoverUrl ||
                 dialogPrimaryTrack?.coverDataUrl ||
@@ -145,6 +160,7 @@ export function TagsTab() {
               }
               alt=""
             />
+            {dialogTrackIds.length > 1 && <span className="tag-cover-hint">첫 곡의 커버입니다. 변경하지 않으면 각 곡의 커버가 유지됩니다.</span>}
             <input
               ref={coverFileInputRef}
               type="file"
@@ -158,17 +174,10 @@ export function TagsTab() {
             >
               <Upload size={13} /> 이미지 변경...
             </button>
-            {tagCoverUrl && (
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "var(--accent)",
-                  fontWeight: 600,
-                }}
-              >
-                새 이미지 준비됨
-              </span>
-            )}
+            {tagCoverUrl && <>
+              <span className="tag-cover-status">새 이미지 준비됨</span>
+              <button className="ui-btn ghost" onClick={() => { setTagCoverUrl(""); if (coverFileInputRef.current) coverFileInputRef.current.value = ""; }}>이미지 변경 취소</button>
+            </>}
           </div>
         </div>
       </div>

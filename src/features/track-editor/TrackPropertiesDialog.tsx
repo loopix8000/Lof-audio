@@ -19,7 +19,7 @@ export function TrackPropertiesDialog() {
       className="modal-backdrop"
       onClick={() => setDialogOpen(false)}
     >
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-box track-properties-dialog" role="dialog" aria-modal="true" aria-label="속성·태그 편집" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <span
             className="modal-head-title"
@@ -37,6 +37,7 @@ export function TrackPropertiesDialog() {
             className="ui-btn ghost icon-only"
             onClick={() => setDialogOpen(false)}
             title="닫기 (Esc)"
+            aria-label="닫기"
           >
             <X size={15} />
           </button>

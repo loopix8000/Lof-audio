@@ -58,7 +58,7 @@ export function CollectionBrowser() {
           return (
             <div
               key={alb.album}
-              onContextMenu={event => handleCollectionContextMenu({ kind: "album", value: alb.album, label: alb.album }, event)}
+              onContextMenu={event => handleCollectionContextMenu({ kind: "album", value: alb.album, label: alb.album }, event, alb.tracks.map(track => track.id))}
               className={`pm-browser-item ${isCurrent ? "active" : ""
                 }`}
               onClick={() => {
@@ -180,7 +180,7 @@ export function CollectionBrowser() {
           return (
             <div
               key={art.artist}
-              onContextMenu={event => handleCollectionContextMenu({ kind: "artist", value: art.artist, label: art.artist }, event)}
+              onContextMenu={event => handleCollectionContextMenu({ kind: "artist", value: art.artist, label: art.artist }, event, art.tracks.map(track => track.id))}
               className={`pm-browser-item ${isCurrent ? "active" : ""
                 }`}
               onClick={() => {
@@ -228,7 +228,7 @@ export function CollectionBrowser() {
           return (
             <div
               key={fld.folderPath}
-              onContextMenu={event => handleCollectionContextMenu({ kind: "folder", value: fld.folderPath, label: fld.folderPath }, event)}
+              onContextMenu={event => handleCollectionContextMenu({ kind: "folder", value: fld.folderPath, label: fld.folderPath }, event, fld.tracks.map(track => track.id))}
               className={`pm-browser-item ${isCurrent ? "active" : ""
                 }`}
               onClick={() => {

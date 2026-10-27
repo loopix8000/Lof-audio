@@ -12,7 +12,7 @@ export function useLibraryVisibility({ libraryState, notifications, trackEditorS
   notifications: NotificationsModel;
   trackEditorState: TrackEditorStateModel;
 }) {
-  const [collectionContextMenu, setCollectionContextMenu] = useState<{ x: number; y: number; target: HideTarget } | null>(null);
+  const [collectionContextMenu, setCollectionContextMenu] = useState<{ x: number; y: number; target: HideTarget; trackIds?: number[] } | null>(null);
   const [visibilityBusy, setVisibilityBusy] = useState(false);
   const { applySnapshot, selectedIds, tracks, setCtxMenu, setSelectedIds, setSubFilter, setNavCategory, navCategory, subFilter, activePlaylistId } = libraryState;
   const { notify } = notifications;
@@ -33,11 +33,11 @@ export function useLibraryVisibility({ libraryState, notifications, trackEditorS
   useEffect(() => { setCollectionContextMenu(null); }, [libraryState.activeWorkspaceId]);
   useEffect(() => { if (libraryState.ctxMenu) setCollectionContextMenu(null); }, [libraryState.ctxMenu]);
 
-  const handleCollectionContextMenu = (target: HideTarget, event: MouseEvent) => {
+  const handleCollectionContextMenu = (target: HideTarget, event: MouseEvent, trackIds?: number[]) => {
     event.preventDefault();
     event.stopPropagation();
     setCtxMenu(null);
-    setCollectionContextMenu({ target, x: event.clientX, y: event.clientY });
+    setCollectionContextMenu({ target, trackIds, x: event.clientX, y: event.clientY });
   };
 
   const handleHideItems = async (targets: HideTarget[]) => {
@@ -74,5 +74,5 @@ export function useLibraryVisibility({ libraryState, notifications, trackEditorS
     finally { setVisibilityBusy(false); }
   };
 
-  return { collectionContextMenu, handleCollectionContextMenu, handleHideItems, handleHideSelected, handleUnhideItem, visibilityBusy };
+  return { collectionContextMenu, setCollectionContextMenu, handleCollectionContextMenu, handleHideItems, handleHideSelected, handleUnhideItem, visibilityBusy };
 }

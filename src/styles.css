@@ -1245,6 +1245,7 @@ button svg {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  container-type: inline-size;
 }
 
 .surface-header {
@@ -1312,11 +1313,45 @@ button svg {
 .album-group-controls {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   flex-shrink: 0;
   gap: 4px;
-  padding: 4px 12px;
-  border-bottom: 1px solid var(--border);
+}
+
+.surface-header .surface-subtitle {
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.surface-header .surface-controls {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.surface-context-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.surface-context-controls:empty {
+  display: none;
+}
+
+@container (max-width: 650px) {
+  .album-group-controls button {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .album-group-controls button span {
+    display: none;
+  }
 }
 
 .chip-strip {
@@ -1637,6 +1672,7 @@ button svg {
 
 .folder-view-switch {
   display: flex;
+  flex-shrink: 0;
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--border);
@@ -1933,6 +1969,8 @@ button svg {
 }
 
 .np-hero-pane {
+  position: relative;
+  isolation: isolate;
   padding: 28px 22px;
   border-right: 1px solid var(--border);
   display: flex;
@@ -1944,6 +1982,33 @@ button svg {
   overflow-y: auto;
 }
 
+.np-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.np-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(52px) saturate(1.35);
+  transform: scale(1.35);
+}
+
+.np-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(247, 249, 252, 0.68), rgba(247, 249, 252, 0.91));
+}
+
+[data-theme="dark"] .np-backdrop::after {
+  background: linear-gradient(180deg, rgba(26, 30, 41, 0.68), rgba(26, 30, 41, 0.94));
+}
+
 .np-art-frame {
   /* Fill the hero column up to a fixed cap, leaving vertical room for the track info below */
   --np-art-max: 480px;
@@ -1951,8 +2016,7 @@ button svg {
   aspect-ratio: 1;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
-  border: 1px solid var(--border);
+  box-shadow: 0 18px 36px -8px rgba(15, 23, 42, 0.3), 0 5px 12px rgba(15, 23, 42, 0.14);
   flex-shrink: 0;
 }
 
@@ -3190,3 +3254,111 @@ label.settings-row {
 .album-match-release span { font-size: 11px; color: var(--text-secondary); }
 .album-match-release.selected { border-color: var(--accent); background: var(--bg-selected); }
 .album-match-release:disabled { opacity: .6; cursor: default; }
+
+/* Track editor */
+.track-properties-dialog {
+  width: min(1000px, calc(100vw - 32px));
+  max-width: calc(100vw - 24px);
+  height: min(760px, calc(100vh - 48px));
+  max-height: calc(100vh - 24px);
+}
+
+.track-properties-dialog .modal-head {
+  min-height: 52px;
+  padding: 0 22px;
+}
+
+.track-properties-dialog .modal-head-title { font-size: 15px; }
+.track-properties-dialog .modal-tabs { min-height: 44px; padding: 0 18px; overflow-x: auto; }
+.track-properties-dialog .modal-tab { flex-shrink: 0; font-size: 12.5px; }
+.track-properties-dialog .modal-content { padding: 20px 22px; gap: 14px; }
+.track-properties-dialog .modal-foot { min-height: 58px; padding: 0 22px; }
+.track-properties-dialog .form-field { height: 36px; font-size: 12.5px; }
+.track-properties-dialog .modal-foot .ui-btn { height: 32px; padding: 0 15px; }
+
+.editor-section-heading h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.editor-section-heading p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tag-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  align-items: start;
+  gap: 28px;
+  padding-top: 8px;
+}
+
+.tag-editor-fields { gap: 16px 14px; }
+.tag-editor-fields .form-label { font-size: 12px; }
+.tag-cover-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; }
+.tag-cover-image { display: block; width: 100%; max-width: 170px; aspect-ratio: 1; object-fit: cover; border-radius: 9px; box-shadow: var(--shadow-cover); }
+.tag-cover-status { color: var(--accent); font-size: 11.5px; font-weight: 600; }
+.tag-cover-hint { color: var(--text-secondary); font-size: 11.5px; line-height: 1.5; }
+
+.track-properties-dialog .metadata-editor-content { overflow: hidden; }
+.match-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; flex: 1; min-height: 0; }
+.match-options { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow-y: auto; padding-right: 4px; }
+.match-results { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.track-properties-dialog .match-mode-controls { flex-wrap: wrap; }
+.track-properties-dialog .match-query-controls { display: flex; flex-direction: column; align-items: stretch; min-width: 0; }
+.track-properties-dialog .match-query-controls .form-field { flex: none; }
+.track-properties-dialog .match-query-controls .ui-btn { justify-content: center; white-space: normal; height: auto; min-height: 30px; padding: 6px 8px; }
+.track-properties-dialog .album-match-releases { display: flex; flex-direction: column; gap: 6px; max-height: 190px; }
+.track-properties-dialog .album-match-release { min-width: 0; padding: 10px 12px; }
+.track-properties-dialog .album-match-release strong, .track-properties-dialog .album-match-release span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track-properties-dialog .match-field-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px 12px; gap: 10px; }
+.track-properties-dialog .match-field-toggles > span { grid-column: 1 / -1; }
+.track-properties-dialog input[type="checkbox"] { accent-color: var(--accent); }
+
+.match-review-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.match-review-heading > div:first-child { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.match-review-heading strong { color: var(--text-primary); font-size: 13px; }
+.match-review-heading span { color: var(--text-secondary); font-size: 11.5px; }
+.match-review-actions { display: flex; gap: 3px; }
+.match-review-actions .ui-btn { height: 26px; padding: 0 8px; }
+.track-properties-dialog .preview-box { min-height: 120px; padding: 8px; gap: 6px; overflow-x: hidden; }
+.track-properties-dialog .match-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "heading covers" "details covers"; padding: 8px 10px; gap: 5px 10px; min-width: 0; }
+.match-card-heading { grid-area: heading; display: flex; align-items: center; gap: 8px; min-width: 0; cursor: pointer; }
+.match-track-identity { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.match-track-identity strong, .match-track-identity > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match-track-identity strong { color: var(--text-primary); font-size: 12px; flex-shrink: 0; max-width: 45%; }
+.match-track-identity > span { color: var(--text-muted); font-size: 10.5px; }
+.match-card-details { grid-area: details; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.track-properties-dialog .match-candidate-select { height: 28px; font-size: 11.5px; }
+.match-cover-compare { grid-area: covers; align-self: center; }
+.track-properties-dialog .match-cover, .track-properties-dialog .match-cover.small { width: 44px; height: 44px; }
+.track-properties-dialog .match-cover-label { font-size: 9px; line-height: 13px; left: 2px; bottom: 2px; }
+.match-changes { display: flex; flex-wrap: wrap; gap: 2px 12px; min-width: 0; }
+.track-properties-dialog .match-diff-line { display: flex; align-items: baseline; gap: 4px; min-width: 0; max-width: 100%; line-height: 1.4; white-space: nowrap; overflow: hidden; }
+.match-diff-label { color: var(--text-secondary); flex-shrink: 0; }
+.match-diff-line .match-before, .match-diff-line .match-after { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.match-unchanged { color: var(--text-secondary); font-size: 11.5px; }
+.match-card-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.lyrics-editor-controls { display: flex; align-items: center; gap: 6px; }
+.lyrics-editor-controls .form-field { min-width: 0; }
+.lyrics-editor-controls .ui-btn { flex-shrink: 0; }
+
+@media (max-width: 700px) {
+  .track-properties-dialog { width: calc(100vw - 24px); height: calc(100vh - 24px); }
+  .track-properties-dialog .modal-head, .track-properties-dialog .modal-foot { padding-left: 14px; padding-right: 14px; }
+  .track-properties-dialog .modal-content { padding: 14px; }
+  .tag-editor-layout { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .tag-cover-panel { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .tag-cover-image { width: 72px; }
+  .track-properties-dialog .metadata-editor-content { overflow-y: auto; }
+  .match-workspace { display: flex; flex-direction: column; flex: none; }
+  .match-options { overflow: visible; padding-right: 0; }
+  .match-results { min-height: 360px; }
+  .match-results .preview-box { max-height: 55vh; }
+  .lyrics-editor-controls { flex-wrap: wrap; }
+}

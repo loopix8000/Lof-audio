@@ -3,6 +3,16 @@ import { getFallbackCoverUrl } from "../../utils/lrc";
 import { useAudioAppContext } from "../../app/AppContext";
 import { Select } from "../../components/Select";
 
+function MatchDiff({ label, before, after }: { label: string; before: string; after: string }) {
+  if (before === after) return null;
+  return (
+    <span className="match-diff-line" title={`${label}: ${before || "—"} → ${after || "—"}`}>
+      <span className="match-diff-label">{label}:</span>
+      <span className="match-before">{before || "—"}</span><span aria-hidden="true">→</span><span className="match-after">{after || "—"}</span>
+    </span>
+  );
+}
+
 export function MetadataMatchTab() {
   const {
     dialogTab,
@@ -42,9 +52,23 @@ export function MetadataMatchTab() {
     handleSearchAlbum, handleSelectAlbum,
     dialogPrimaryTrack,
   } = useAudioAppContext();
+  const selectableIds = matchPreviews.filter(preview => {
+    const index = matchSelectedCandIdx[preview.trackId] ?? 0;
+    return Boolean((index >= 0 && preview.candidates[index]) || preview.matchedSyncedLyrics || preview.matchedPlainLyrics);
+  }).map(preview => preview.trackId);
+  const setAllMatchesChecked = (checked: boolean) => setMatchCheckedMap(previous => {
+    const next = { ...previous };
+    for (const id of checked ? selectableIds : matchPreviews.map(preview => preview.trackId)) next[id] = checked;
+    return next;
+  });
   return (dialogTab === "online" && (
     <>
-      <div className="modal-content">
+      <div className="modal-content metadata-editor-content">
+        <div className="editor-section-heading">
+          <div><h2>자동 정보 매칭</h2><p>후보를 검색하고 곡별 변경 내용을 확인한 뒤 적용하세요.</p></div>
+        </div>
+        <div className="match-workspace">
+        <div className="match-options">
         <div className="match-mode-controls">
           <button className={`ui-btn ${matchMode === "track" ? "solid" : ""}`} disabled={matchLoading} onClick={() => setMatchMode("track")}>곡별 조회</button>
           <button className={`ui-btn ${matchMode === "album" ? "solid" : ""}`} disabled={matchLoading} onClick={() => setMatchMode("album")}><Disc size={13} /> 앨범 조회</button>
@@ -53,7 +77,7 @@ export function MetadataMatchTab() {
         {matchMode === "album" ? (
           <>
             <div className="match-query-controls">
-              <input className="form-field" value={albumQuery} onChange={event => setAlbumQuery(event.target.value)} placeholder={`${dialogPrimaryTrack?.artist || ""} ${dialogPrimaryTrack?.album || "앨범명 또는 아티스트"}`} onKeyDown={event => event.key === "Enter" && handleSearchAlbum()} />
+              <input className="form-field" aria-label="앨범 검색어" value={albumQuery} onChange={event => setAlbumQuery(event.target.value)} placeholder={`${dialogPrimaryTrack?.artist || ""} ${dialogPrimaryTrack?.album || "앨범명 또는 아티스트"}`} onKeyDown={event => event.key === "Enter" && handleSearchAlbum()} />
               <button className="ui-btn solid" disabled={matchLoading} onClick={handleSearchAlbum}>{matchLoading ? "앨범 조회 중…" : "앨범 검색"}</button>
             </div>
             {albumCandidates.length > 0 && <div className="album-match-releases" role="group" aria-label="앨범 후보">
@@ -64,10 +88,11 @@ export function MetadataMatchTab() {
             </div>}
           </>
         ) : (
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div className="match-query-controls match-track-query">
           {dialogTrackIds.length === 1 && (
             <input
               className="form-field"
+              aria-label="곡 검색어"
               value={manualMbQuery}
               onChange={(e) => setManualMbQuery(e.target.value)}
               placeholder="아티스트 또는 곡 제목 검색어..."
@@ -87,9 +112,6 @@ export function MetadataMatchTab() {
           )}
           <button
             className="ui-btn solid"
-            style={{
-              marginLeft: dialogTrackIds.length > 1 ? "auto" : 0,
-            }}
             onClick={handleLookupAutoMatchPreview}
             disabled={matchLoading}
           >
@@ -135,7 +157,7 @@ export function MetadataMatchTab() {
               checked={applyFieldAlbum}
               onChange={(e) => setApplyFieldAlbum(e.target.checked)}
             />
-            앨범·연도
+            앨범·연도·번호
           </label>
           <label>
             <input
@@ -153,6 +175,16 @@ export function MetadataMatchTab() {
             />
             가사(LRC)
           </label>
+        </div>
+
+        </div>
+        <div className="match-results">
+        <div className="match-review-heading">
+          <div><strong>곡별 변경 미리보기</strong><span>{matchPreviews.length > 0 ? `${confirmedMatchCount} / ${dialogTrackIds.length}곡 선택` : "검색 결과가 여기에 표시됩니다"}</span></div>
+          {matchPreviews.length > 0 && <div className="match-review-actions">
+            <button className="ui-btn ghost" disabled={selectableIds.length === 0 || matchLoading || lyricsPendingIds.size > 0} onClick={() => setAllMatchesChecked(true)}>전체 선택</button>
+            <button className="ui-btn ghost" disabled={confirmedMatchCount === 0 || matchLoading || lyricsPendingIds.size > 0} onClick={() => setAllMatchesChecked(false)}>선택 해제</button>
+          </div>}
         </div>
 
         {/* Per-Track Before -> After Comparison & Confirmation List */}
@@ -183,24 +215,33 @@ export function MetadataMatchTab() {
                 Boolean(cand) ||
                 Boolean(p.matchedSyncedLyrics) ||
                 Boolean(p.matchedPlainLyrics);
+              const changes = cand ? [
+                { label: "제목", before: orig.title, after: applyFieldTitle ? cand.title : orig.title },
+                { label: "아티스트", before: orig.artist, after: applyFieldArtist ? cand.artist : orig.artist },
+                { label: "앨범", before: orig.album, after: applyFieldAlbum ? cand.album : orig.album },
+                { label: "연도 · 번호", before: `${orig.year ?? "—"} · ${orig.trackNumber ?? "—"}`, after: `${applyFieldAlbum ? cand.year ?? orig.year ?? "—" : orig.year ?? "—"} · ${applyFieldAlbum ? cand.trackNumber ?? orig.trackNumber ?? "—" : orig.trackNumber ?? "—"}` },
+              ].filter(change => change.before !== change.after) : [];
 
               return (
                 <div
                   key={p.trackId}
                   className={`match-card ${isChecked ? "checked" : ""}`}
                 >
-                  <input
-                    type="checkbox"
-                    style={{ marginTop: 4, cursor: "pointer" }}
-                    checked={isChecked}
-                    disabled={!hasMatch}
-                    onChange={(e) =>
-                      setMatchCheckedMap((prev) => ({
-                        ...prev,
-                        [p.trackId]: e.target.checked,
-                      }))
-                    }
-                  />
+                  <label className="match-card-heading">
+                    <input
+                      type="checkbox"
+                      aria-label={`${orig.title} 변경 사항 적용`}
+                      checked={isChecked}
+                      disabled={!hasMatch}
+                      onChange={(e) =>
+                        setMatchCheckedMap((prev) => ({
+                          ...prev,
+                          [p.trackId]: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="match-track-identity"><strong>{orig.title}</strong><span title={orig.fileName}>{orig.fileName}</span></span>
+                  </label>
 
                   {(() => {
                     const currentCover =
@@ -267,32 +308,11 @@ export function MetadataMatchTab() {
                     );
                   })()}
 
-                  <div
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 3,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 10.5,
-                        color: "var(--text-muted)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                      title={orig.fileName}
-                    >
-                      파일: {orig.fileName}
-                    </div>
-
+                  <div className="match-card-details">
                     {p.candidates.length > 0 && (
                       <Select
                         aria-label={`${orig.title} 메타데이터 후보`}
-                        style={{ height: 24, fontSize: 11 }}
+                        className="match-candidate-select"
                         value={selIdx}
                         onChange={value =>
                           void handleSelectMatchCandidate(p.trackId, value, p.candidates[value] || null)
@@ -308,36 +328,9 @@ export function MetadataMatchTab() {
                     )}
 
                     {cand ? (
-                      <>
-                        <div className="match-diff-line">
-                          <span>제목:</span>
-                          {applyFieldTitle && cand.title !== orig.title ? (
-                            <>
-                              <span className="match-before">
-                                {orig.title}
-                              </span>
-                              <span>→</span>
-                              <span className="match-after">
-                                {cand.title}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="match-after">
-                              {orig.title} (유지)
-                            </span>
-                          )}
-                        </div>
-                        <div className="match-diff-line">
-                          <span>아티스트·앨범:</span>
-                          <span className="match-after">
-                            {applyFieldArtist ? cand.artist : orig.artist} ·{" "}
-                            {applyFieldAlbum ? cand.album : orig.album}
-                            {applyFieldAlbum && cand.year
-                              ? ` (${cand.year})`
-                              : ""}
-                          </span>
-                        </div>
-                      </>
+                      <div className="match-changes">
+                        {changes.length ? changes.map(change => <MatchDiff key={change.label} {...change} />) : <span className="match-unchanged">선택한 태그 변경 없음</span>}
+                      </div>
                     ) : (
                       <div
                         style={{
@@ -349,14 +342,7 @@ export function MetadataMatchTab() {
                       </div>
                     )}
 
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        marginTop: 2,
-                      }}
-                    >
+                    <div className="match-card-badges">
                       {lyricsPendingIds.has(p.trackId) ? <span className="match-badge">가사 후보 조회 중…</span> : p.lyricsError ? <span className="match-badge">가사 조회 실패</span> : p.matchedSyncedLyrics ? (
                         <span className="match-badge synced">
                           싱크 가사 매칭됨
@@ -385,6 +371,8 @@ export function MetadataMatchTab() {
               );
             })
           )}
+        </div>
+        </div>
         </div>
       </div>
       <div className="modal-foot">

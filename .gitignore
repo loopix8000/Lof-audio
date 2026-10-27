@@ -4,6 +4,7 @@ node_modules/
 # Frontend build output
 dist/
 dist-ssr/
+release/
 *.local
 
 # Rust / Tauri build output
@@ -21,6 +22,7 @@ Thumbs.db
 # Local-only helpers; keep the documented signing-key generator in source control
 /scripts/*
 !/scripts/generate-updater-key.mjs
+!/scripts/package-tauri.mjs
 
 # Generated at release time (contains the updater public key)
 src-tauri/tauri.updater.generated.json

@@ -7,7 +7,7 @@ GitHub Actions의 **Build Windows release** 워크플로로 서명된 NSIS 설�
 | 정식 | 정식 버전만 | `https://github.com/loopix8000/Lof-audio/releases/download/stable/latest.json` |
 | 베타 | 정식·시험 버전 중 최신 | `https://github.com/loopix8000/Lof-audio/releases/download/beta/latest.json` |
 
-정식 버전(`1.2.0`)은 두 채널에, 시험 버전(`0.2.0-alpha.1`, `1.0.0-rc.1` 등)은 베타 채널에만 올린다. 이미 더 최신 버전이 올라가 있는 채널은 덮어쓰지 않는다. 채널 릴리즈가 아직 없으면 앱은 업데이트 없음으로 처리한다. 지금은 시험 버전만 있으므로 새로 설치한 앱의 기본 채널은 베타다.
+정식 버전(`1.2.0`)은 두 채널에, 시험 버전(`0.2.0-alpha.1`, `1.0.0-rc.1` 등)은 베타 채널에만 올린다. 이미 더 최신 버전이 올라가 있는 채널은 덮어쓰지 않는다. 채널 릴리즈가 아직 없으면 앱은 업데이트 없음으로 처리한다. 새로 설치한 앱의 기본 채널은 정식이며, 기존에 선택한 채널은 유지된다.
 
 ## 처음 한 번: 서명 키 등록
 
@@ -42,7 +42,7 @@ GitHub Actions의 **Build Windows release** 워크플로로 서명된 NSIS 설�
 $env:TAURI_UPDATER_PUBLIC_KEY = Get-Content .private/updater.key.pub -Raw
 $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content .private/updater.key -Raw
 npm run updater:prepare
-npm run tauri build -- --bundles nsis --config src-tauri/tauri.updater.generated.json
+npm run package:nsis -- --config src-tauri/tauri.updater.generated.json
 ```
 
 생성된 `src-tauri/tauri.updater.generated.json`은 Git에서 제외된다. 이 설정 없이 빌드한 앱(개발 빌드 포함)은 공개키가 없어 업데이트 확인이 비활성화된다.

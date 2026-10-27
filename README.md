@@ -52,16 +52,27 @@
 
 Opus 디코더를 빌드하려면 CMake가 필요합니다. Windows에서는 Visual Studio에 포함된 CMake도 자동으로 찾습니다.
 
-```bash
+```powershell
 # 의존성 설치
-npm install
+npm ci
 
 # 개발 모드 실행 (Tauri 데스크탑 창 실행)
-npm run tauri dev
+npm start
 
-# 프로덕션 빌드
-npm run tauri build
+# 프론트엔드 타입 검사 및 빌드
+npm run build
+
+# Windows 폴더 배포본 (package:dir도 동일)
+npm run package
+
+# Windows MSI 설치 파일
+npm run package:msi
+
+# Windows NSIS 설치 파일
+npm run package:nsis
 ```
+
+폴더 배포본은 `release/win-unpacked/Lof Audio.exe`, 설치 파일은 `release/`에 생성됩니다. 같은 경로를 재사용하므로 배포본이 실행 중이면 종료한 뒤 빌드하세요. Rust 코드만 검사하려면 `src-tauri`에서 `cargo check`를 실행합니다.
 
 ## 라이선스
 

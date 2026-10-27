@@ -72,8 +72,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   saveLrcFile: true,
   matchApplyFields: { title: true, artist: true, album: true, cover: true, lyrics: true },
   lyricOffsetStepMs: 100,
-  // Only prerelease builds exist so far, so new installs follow the beta channel
-  updateChannel: "beta",
+  updateChannel: "stable",
   autoCheckUpdates: true,
 };
 
