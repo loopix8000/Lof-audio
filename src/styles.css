@@ -607,6 +607,22 @@ button svg {
 }
 
 /* Tier 2: Flat Synced Lyrics Section (Compact 3-Line Height, No Card Style) */
+.pm-lyrics-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 24px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pm-lyrics-toggle:hover { color: var(--text-primary); }
+
 .pm-lyrics-section {
   height: 106px;
   min-height: 106px;
@@ -1957,6 +1973,10 @@ button svg {
   overflow: hidden;
 }
 
+.np-body.lyrics-collapsed {
+  grid-template-columns: minmax(240px, 1fr) 290px;
+}
+
 @media (max-width: 1020px) {
   .np-body {
     grid-template-columns:
@@ -1965,6 +1985,9 @@ button svg {
   }
   .np-queue-pane {
     display: none !important;
+  }
+  .np-body.lyrics-collapsed {
+    grid-template-columns: minmax(220px, 1fr);
   }
 }
 

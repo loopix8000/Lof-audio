@@ -1,4 +1,4 @@
-import { ChevronLeft, Sparkles } from "lucide-react";
+import { ChevronLeft, PanelRight, Sparkles } from "lucide-react";
 import React from "react";
 import { NowPlayingArtwork } from "./NowPlayingArtwork";
 import { NowPlayingLyrics } from "../lyrics/NowPlayingLyrics";
@@ -6,6 +6,7 @@ import { NowPlayingQueue } from "./NowPlayingQueue";
 import { useAudioAppContext } from "../../app/AppContext";
 
 export function NowPlayingScreen() {
+  const [lyricsOpen, setLyricsOpen] = React.useState(true);
   const {
     setNowPlayingOpen,
     currentViewTitle,
@@ -32,6 +33,9 @@ export function NowPlayingScreen() {
       </div>
 
       <div className="surface-controls">
+        <button className={`ui-btn ghost icon-only ${lyricsOpen ? "active" : ""}`} onClick={() => setLyricsOpen(open => !open)} title={lyricsOpen ? "가사 접기" : "가사 펼치기"} aria-label={lyricsOpen ? "가사 접기" : "가사 펼치기"} aria-expanded={lyricsOpen}>
+          <PanelRight size={14} />
+        </button>
         {activeTrack && (
           <button
             className="ui-btn"
@@ -46,7 +50,7 @@ export function NowPlayingScreen() {
     </div>
 
     <div
-      className="np-body"
+      className={`np-body ${lyricsOpen ? "" : "lyrics-collapsed"}`}
       style={
         {
           // Scaled so the factors sum above 1; grid underfills when fr totals < 1
@@ -59,7 +63,7 @@ export function NowPlayingScreen() {
       <NowPlayingArtwork />
 
       {/* Center: Large Synced Lyrics Stage */}
-      <NowPlayingLyrics />
+      {lyricsOpen && <NowPlayingLyrics />}
 
       {/* Right: Up Next Playback Queue */}
       <NowPlayingQueue />

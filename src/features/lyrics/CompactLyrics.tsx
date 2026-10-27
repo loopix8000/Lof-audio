@@ -13,7 +13,7 @@ export function CompactLyrics() {
     lyricOffsetStepMs,
     openPropertiesDialog,
   } = useAudioAppContext();
-  return (<section className="pm-lyrics-section">
+  return (<section id="compact-lyrics" className="pm-lyrics-section">
     <div className="pm-lyrics-scroll" ref={playerLyricsRef}>
       {lyricLines.length > 0 ? (
         lyricLines.map((line, idx) => (
