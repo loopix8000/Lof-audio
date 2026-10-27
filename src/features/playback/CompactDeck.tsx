@@ -27,10 +27,11 @@ export function CompactDeck() {
     isMuted,
     handleToggleMute,
     handleSetVolume,
+    handleRowContextMenu,
   } = useAudioAppContext();
   return (<section className="pm-deck">
     <div className="pm-hero">
-      <img className="pm-cover" src={activeCover} alt="" />
+      <img className="pm-cover" src={activeCover} alt="" onContextMenu={(e) => activeTrack && handleRowContextMenu(activeTrack, e)} />
       <div className="pm-meta">
         <div className="pm-title-row">
           <div className="pm-title" title={activeTrack?.title}>

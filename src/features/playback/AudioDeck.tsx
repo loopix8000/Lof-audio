@@ -26,12 +26,14 @@ export function AudioDeck() {
     isMuted,
     handleToggleMute,
     handleSetVolume,
+    handleRowContextMenu,
   } = useAudioAppContext();
   return (<footer className="audio-deck">
     <div className="deck-track">
       <div
         className={`deck-art-wrap ${nowPlayingOpen ? "active" : ""}`}
         onClick={() => setNowPlayingOpen((prev) => !prev)}
+        onContextMenu={(e) => activeTrack && handleRowContextMenu(activeTrack, e)}
         title={
           nowPlayingOpen
             ? "보관함 화면으로 돌아가기"

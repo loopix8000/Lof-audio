@@ -58,7 +58,6 @@ export function useLyricsDisplay({
     };
     scrollTarget(lyricsBoxRef.current);
     scrollTarget(playerLyricsRef.current);
-    scrollTarget(npLyricsRef.current);
   }, [activeLyricIdx, activeTrack?.id, appMode, showRightLyricsInLib, nowPlayingOpen]);
 
   const handleOffsetChange = async (deltaMs: number) => {

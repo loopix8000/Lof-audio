@@ -39,6 +39,7 @@ export interface AppSettings {
   showRightLyricsInLib: boolean;
   lyricsPaneWidth: number;
   npHeroRatio: number;
+  npQueueWidth: number;
   colWidths: ColumnWidths;
   sortField: SortField;
   sortAsc: boolean;
@@ -65,6 +66,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showRightLyricsInLib: true,
   lyricsPaneWidth: 290,
   npHeroRatio: 0.52,
+  npQueueWidth: 290,
   colWidths: { num: 46, artist: 180, album: 180, year: 60, format: 64, duration: 68 },
   sortField: "album",
   sortAsc: true,
@@ -119,6 +121,7 @@ export function normalizeSettings(raw: Record<string, unknown>): AppSettings {
     showRightLyricsInLib: pick(raw.showRightLyricsInLib, d.showRightLyricsInLib, isBool),
     lyricsPaneWidth: clamp(pick(raw.lyricsPaneWidth, d.lyricsPaneWidth, isNum), 190, 560),
     npHeroRatio: clamp(pick(raw.npHeroRatio, d.npHeroRatio, isNum), 0.2, 0.75),
+    npQueueWidth: clamp(pick(raw.npQueueWidth, d.npQueueWidth, isNum), 200, 560),
     colWidths,
     sortField: pick(raw.sortField, d.sortField, (v) =>
       ["trackNumber", "title", "artist", "album", "durationSecs", "year"].includes(v as string),

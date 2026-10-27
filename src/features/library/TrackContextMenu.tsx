@@ -16,7 +16,19 @@ export function TrackContextMenu() {
     navCategory,
     handleHideSelected,
     visibilityBusy,
+    setNavCategory,
+    setSubFilter,
+    setNowPlayingOpen,
+    setShowPlayerBrowser,
   } = useAudioAppContext();
+  // Same jump as the artist/album links on the playback screens: filter the library and leave the overlay
+  const goTo = (category: "artists" | "albums", value: string) => {
+    setCtxMenu(null);
+    setNavCategory(category);
+    setSubFilter(value);
+    setNowPlayingOpen(false);
+    setShowPlayerBrowser(false);
+  };
   const menuRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const menu = menuRef.current;
@@ -39,6 +51,17 @@ export function TrackContextMenu() {
         <span>재생</span>
         <span className="menu-kbd">Enter</span>
       </button>
+      {(ctxMenu.track.artist || ctxMenu.track.album) && <div className="native-menu-sep" />}
+      {ctxMenu.track.artist && (
+        <button className="native-menu-item" onClick={() => goTo("artists", ctxMenu.track.artist)}>
+          <span>아티스트로 이동</span>
+        </button>
+      )}
+      {ctxMenu.track.album && (
+        <button className="native-menu-item" onClick={() => goTo("albums", ctxMenu.track.album)}>
+          <span>앨범으로 이동</span>
+        </button>
+      )}
       <div className="native-menu-sep" />
       <button
         className="native-menu-item"

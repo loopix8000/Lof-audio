@@ -53,12 +53,14 @@ export function useSettingsSync({
     setShowRightLyricsInLib,
     setLyricsPaneWidth,
     setNpHeroRatio,
+    setNpQueueWidth,
     setColWidths,
     alwaysOnTop,
     showLeftSidebar,
     showRightLyricsInLib,
     lyricsPaneWidth,
     npHeroRatio,
+    npQueueWidth,
     colWidths,
   } = windowLayout;
   const {
@@ -114,6 +116,7 @@ export function useSettingsSync({
         setShowRightLyricsInLib(st.showRightLyricsInLib);
         setLyricsPaneWidth(st.lyricsPaneWidth);
         setNpHeroRatio(st.npHeroRatio);
+        setNpQueueWidth(st.npQueueWidth);
         setColWidths(st.colWidths);
         setSortField(st.sortField);
         setSortAsc(st.sortAsc);
@@ -164,6 +167,7 @@ export function useSettingsSync({
       showRightLyricsInLib,
       lyricsPaneWidth,
       npHeroRatio,
+      npQueueWidth,
       colWidths,
       sortField,
       sortAsc,
@@ -184,7 +188,7 @@ export function useSettingsSync({
       updateChannel, autoCheckUpdates,
       theme, alwaysOnTop, rescanOnStartup, isMuted, prevVolume, playback.volume, shuffle,
       repeatMode, npArtMax, showLeftSidebar, showRightLyricsInLib, lyricsPaneWidth,
-      npHeroRatio, colWidths, sortField, sortAsc, folderViewMode, saveLrcFile, applyFieldTitle,
+      npHeroRatio, npQueueWidth, colWidths, sortField, sortAsc, folderViewMode, saveLrcFile, applyFieldTitle,
       applyFieldArtist, applyFieldAlbum, applyFieldCover, applyFieldLyrics, lyricOffsetStepMs,
     ],
   );

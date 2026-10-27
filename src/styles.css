@@ -611,24 +611,41 @@ button svg {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   width: 100%;
-  min-height: 24px;
+  height: 18px;
+  flex-shrink: 0;
   border: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-subtle);
+  /* Only a soft shadow falling from the player above; it fades to fully transparent so no edge or line shows */
+  --pm-toggle-hover: rgba(255, 255, 255, 0.28);
+  background-color: transparent;
+  background-image: linear-gradient(180deg, var(--pm-lyrics-edge-shadow), transparent 7px);
   color: var(--text-secondary);
   cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
 }
 
-.pm-lyrics-toggle:hover { color: var(--text-primary); }
+[data-theme="dark"] .pm-lyrics-toggle { --pm-toggle-hover: rgba(255, 255, 255, 0.05); }
+
+/* While lyrics are open the shadow is the divider, so drop the player's own bottom line */
+.pm-deck:has(+ .pm-lyrics-area > .pm-lyrics-toggle[aria-expanded="true"]) { border-bottom-color: transparent; }
+
+/* Hover swaps the shadow for a flat faint highlight */
+.pm-lyrics-toggle:hover {
+  background-color: var(--pm-toggle-hover);
+  background-image: none;
+  color: var(--text-primary);
+}
+
+/* Collapsed: no lyrics below to separate from, so drop the gradient */
+.pm-lyrics-toggle[aria-expanded="false"] { background: transparent; }
+.pm-lyrics-toggle[aria-expanded="false"]:hover { background: rgba(128, 145, 164, 0.12); }
 
 .pm-lyrics-section {
-  height: 106px;
-  min-height: 106px;
-  max-height: 106px;
+  /* Exactly three lyric lines; padding lives outside the scroll box so it never reveals a 4th */
+  --pm-lyric-h: 24px;
+  --pm-lyric-gap: 1px;
   flex-shrink: 0;
-  background: var(--bg-subtle);
+  background: transparent; /* the .pm-lyrics-area backdrop shows through */
   border: none;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
@@ -638,15 +655,48 @@ button svg {
   overflow: hidden;
 }
 
-.pm-lyrics-scroll {
-  flex: 1;
-  min-height: 0;
+/* Wraps the toggle and lyrics so one backdrop sits behind both */
+.pm-lyrics-area {
+  /* Short inner shadow at the top (toggle) and bottom (footer) edges for a little depth */
+  --pm-lyrics-edge-shadow: rgba(15, 23, 42, 0.08);
   position: relative;
-  overflow-y: auto;
-  padding: 4px 8px;
+  isolation: isolate;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+}
+
+/* Blurred album art behind the lyrics: same backdrop as the Now Playing screen, tuned for this short
+   strip — a wide spread, scaled up so the blur's soft edges fall outside the box (extra specificity
+   beats the shared dark rule) */
+.pm-lyrics-area .pm-lyrics-backdrop.cover-backdrop {
+  --cover-backdrop-blur: 25px;
+  --cover-backdrop-scale: 1.65;
+  --cover-backdrop-saturate: 1.15;
+  --cover-backdrop-mask: linear-gradient(135deg, rgb(0 0 0 / 0.34), rgb(0 0 0 / 0.24));
+  background: var(--bg-subtle);
+}
+
+[data-theme="dark"] .pm-lyrics-area { --pm-lyrics-edge-shadow: rgba(0, 0, 0, 0.28); }
+
+[data-theme="dark"] .pm-lyrics-area .pm-lyrics-backdrop.cover-backdrop {
+  --cover-backdrop-mask: linear-gradient(135deg, rgb(0 0 0 / 0.32), rgb(0 0 0 / 0.2));
+}
+
+/* Muted text loses contrast on the art, so step the dim lines and footer up one tone */
+.pm-lyrics-section .pm-lyric-line:not(.active),
+.pm-lyrics-section .pm-micro-btn { color: var(--text-secondary); }
+
+.pm-lyrics-scroll {
+  flex: none;
+  height: calc(var(--pm-lyric-h) * 3 + var(--pm-lyric-gap) * 2);
+  margin: 8px 0;
+  position: relative;
+  overflow-y: auto;
+  padding: 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pm-lyric-gap);
   scroll-behavior: smooth;
 }
 
@@ -657,7 +707,8 @@ button svg {
 }
 
 .pm-lyric-line {
-  min-height: 24px;
+  flex-shrink: 0;
+  height: var(--pm-lyric-h);
   font-size: 12px;
   line-height: 20px;
   color: var(--text-muted);
@@ -676,11 +727,13 @@ button svg {
   color: var(--text-primary);
 }
 
+/* Matches the Now Playing screen's current line: no pill, accent text with a soft glow */
 .pm-lyric-line.active {
-  background: var(--accent-soft);
+  background: transparent;
   color: var(--accent);
   font-weight: 700;
-  font-size: 12.5px;
+  font-size: 13px;
+  text-shadow: 0 2px 8px rgba(37, 99, 235, 0.28), 0 1px 2px rgba(15, 23, 42, 0.18);
 }
 
 .pm-lyrics-footer {
@@ -690,7 +743,7 @@ button svg {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--border-subtle);
+  background: linear-gradient(0deg, var(--pm-lyrics-edge-shadow), transparent 7px);
 }
 
 .pm-micro-btn {
@@ -1951,10 +2004,15 @@ button svg {
   overflow: hidden;
 }
 
+/* Solid header spanning every column except the full-height queue */
 .np-header {
+  grid-column: 1 / -2;
+  grid-row: 1;
+  min-width: 0;
   height: 46px;
   min-height: 46px;
   padding: 0 18px;
+  background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -1963,19 +2021,42 @@ button svg {
 }
 
 .np-body {
+  position: relative;
+  isolation: isolate;
+  background: #e3e9ef;
+  --np-queue-effective: min(var(--np-queue-width, 290px), max(200px, calc(100% - 520px)));
+  --np-glass: rgba(255, 255, 255, 0.13);
+  --np-glass-line: rgba(255, 255, 255, 0.2);
+  --np-hero-btn: rgba(255, 255, 255, 0.62);
+  --np-hero-btn-hover: rgba(255, 255, 255, 0.82);
+  --np-hero-btn-line: rgba(255, 255, 255, 0.7);
+  --np-hero-text-shadow: 0 1px 2px rgba(15, 23, 42, 0.14);
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns:
     minmax(240px, var(--np-hero-fr, 1.1fr))
     minmax(280px, var(--np-lyrics-fr, 1fr))
-    290px;
+    var(--np-queue-effective);
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
 }
 
-.np-body.lyrics-collapsed {
-  grid-template-columns: minmax(240px, 1fr) 290px;
+[data-theme="dark"] .np-body {
+  --np-glass: rgba(20, 29, 41, 0.2);
+  --np-glass-line: rgba(255, 255, 255, 0.08);
+  --np-hero-btn: rgba(255, 255, 255, 0.07);
+  --np-hero-btn-hover: rgba(255, 255, 255, 0.13);
+  --np-hero-btn-line: rgba(255, 255, 255, 0.1);
+  --np-hero-text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
+
+.np-body.lyrics-collapsed {
+  grid-template-columns: minmax(240px, 1fr) var(--np-queue-effective);
+}
+
+.np-hero-pane,
+.np-lyrics-pane { grid-row: 2; }
 
 @media (max-width: 1020px) {
   .np-body {
@@ -1989,48 +2070,59 @@ button svg {
   .np-body.lyrics-collapsed {
     grid-template-columns: minmax(220px, 1fr);
   }
+  .np-header { grid-column: 1 / -1; }
 }
 
 .np-hero-pane {
   position: relative;
   isolation: isolate;
   padding: 28px 22px;
-  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 18px;
-  background: var(--bg-subtle);
+  background: transparent;
   overflow-y: auto;
 }
 
-.np-backdrop {
+/* Blurred album-cover backdrop shared by the Now Playing screen and the compact player.
+   The parent positions it (needs position + isolation) and may set --cover-backdrop-blur. */
+.cover-backdrop {
   position: absolute;
   inset: 0;
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
+  /* Tint is an opaque base under a faded cover, not a translucent overlay on top:
+     stacked dark-cover + light-overlay layers get clipped separately at the rounded
+     corner, and the overlay's anti-aliasing leaves a dark rim along the curve. */
+  --cover-backdrop-mask: linear-gradient(135deg, rgb(0 0 0 / 0.32), rgb(0 0 0 / 0.18));
+  background: linear-gradient(135deg, rgb(237, 242, 247), rgb(243, 246, 249));
 }
 
-.np-backdrop img {
+.cover-backdrop img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: blur(52px) saturate(1.35);
-  transform: scale(1.35);
+  filter: blur(var(--cover-backdrop-blur, 90px)) saturate(var(--cover-backdrop-saturate, 0.8));
+  transform: scale(var(--cover-backdrop-scale, 1.35));
+  -webkit-mask-image: var(--cover-backdrop-mask);
+  mask-image: var(--cover-backdrop-mask);
 }
 
-.np-backdrop::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(247, 249, 252, 0.68), rgba(247, 249, 252, 0.91));
+[data-theme="dark"] .cover-backdrop {
+  --cover-backdrop-mask: linear-gradient(135deg, rgb(0 0 0 / 0.24), rgb(0 0 0 / 0.12));
+  background: #1a1e29;
 }
 
-[data-theme="dark"] .np-backdrop::after {
-  background: linear-gradient(180deg, rgba(26, 30, 41, 0.68), rgba(26, 30, 41, 0.94));
+.np-backdrop { right: var(--np-queue-effective); }
+
+@media (max-width: 1020px) {
+  .np-backdrop { right: 0; }
 }
+
+[data-theme="dark"] .np-body { background: #1a1e29; }
 
 .np-art-frame {
   /* Fill the hero column up to a fixed cap, leaving vertical room for the track info below */
@@ -2058,6 +2150,7 @@ button svg {
   text-align: center;
   gap: 6px;
   min-width: 0;
+  text-shadow: var(--np-hero-text-shadow);
 }
 
 .np-badges {
@@ -2095,7 +2188,7 @@ button svg {
 .np-track-artist {
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--text-primary);
   cursor: pointer;
   max-width: 100%;
   white-space: nowrap;
@@ -2139,14 +2232,35 @@ button svg {
   margin-top: 8px;
 }
 
+/* Lightly see-through so the blurred cover shows a little; the solid (liked) state stays as is */
+.np-hero-actions .ui-btn:not(.solid) {
+  border-color: var(--np-hero-btn-line);
+  background: var(--np-hero-btn);
+  text-shadow: var(--np-hero-text-shadow);
+}
+
+.np-hero-actions .ui-btn:not(.solid):hover:not(:disabled) { background: var(--np-hero-btn-hover); }
+
 .np-lyrics-pane {
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--bg-surface);
+  background: var(--np-glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-left: 1px solid var(--np-glass-line);
 }
+
+.np-lyrics-pane .np-pane-head {
+  color: var(--text-secondary);
+  border-color: transparent;
+  padding: 0 22px;
+}
+
+.np-lyrics-pane .np-sync-label,
+.np-lyrics-pane .ui-btn.ghost { color: var(--text-secondary); }
 
 .np-pane-head {
   height: 38px;
@@ -2171,32 +2285,90 @@ button svg {
   font-size: 11px;
   font-weight: 500;
   color: var(--text-muted);
-  margin-right: 4px;
+  margin-right: 6px;
   font-family: var(--font-num);
+  white-space: nowrap;
 }
+
+.np-sync-btn {
+  min-width: 38px;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: 500 11px var(--font-num);
+  cursor: pointer;
+}
+
+.np-sync-btn:hover { background: rgba(128, 145, 164, 0.18); color: var(--text-primary); }
+.np-sync-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.np-lyrics-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 16px 10px;
+}
+
+.np-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.np-text-btn:hover { background: rgba(128, 145, 164, 0.18); color: var(--text-primary); }
+.np-text-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .np-lyrics-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 36px 28px;
+  padding: 0 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  mask-image: linear-gradient(to bottom, transparent, black 12%, black 88%, transparent);
+}
+
+.np-lyrics-spacer {
+  flex: 0 0 calc(50% - 28px);
+  width: 1px;
+  pointer-events: none;
 }
 
 .np-lyric-line {
+  flex-shrink: 0;
   width: 100%;
   max-width: 560px;
   text-align: center;
   padding: 8px 14px;
   border-radius: 8px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
   font-size: 14.5px;
   line-height: 1.55;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+
+.np-lyric-line:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .np-lyric-line:hover {
@@ -2205,10 +2377,11 @@ button svg {
 }
 
 .np-lyric-line.active {
-  background: var(--accent-soft);
+  background: transparent;
   color: var(--accent);
   font-size: 16.5px;
   font-weight: 700;
+  text-shadow: 0 2px 8px rgba(37, 99, 235, 0.28), 0 1px 2px rgba(15, 23, 42, 0.18);
 }
 
 .np-plain-lyrics {
@@ -2228,11 +2401,14 @@ button svg {
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
 .np-queue-pane {
+  grid-column: -2;
+  grid-row: 1 / -1;
+  position: relative;
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -2240,6 +2416,9 @@ button svg {
   min-height: 0;
   background: var(--bg-subtle);
 }
+
+/* Queue head lines up with the np-header divider */
+.np-queue-pane .np-pane-head { height: 46px; min-height: 46px; }
 
 .np-queue-count {
   font-size: 11px;
@@ -2422,7 +2601,7 @@ button svg {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  max-width: 540px;
+  max-width: 800px;
   width: 100%;
   justify-self: center;
 }

@@ -52,6 +52,7 @@ export function useWindowLayout({
   const NP_HERO_RATIO_DEFAULT = 0.52;
 
   const [npHeroRatio, setNpHeroRatio] = useState(NP_HERO_RATIO_DEFAULT);
+  const [npQueueWidth, setNpQueueWidth] = useState(290);
 
   const [resizingNpSplit, setResizingNpSplit] = useState(false);
 
@@ -255,11 +256,13 @@ export function useWindowLayout({
     setShowRightLyricsInLib,
     setLyricsPaneWidth,
     setNpHeroRatio,
+    setNpQueueWidth,
     setColWidths,
     alwaysOnTop,
     showLeftSidebar,
     lyricsPaneWidth,
     npHeroRatio,
+    npQueueWidth,
     colWidths,
     setNowPlayingOpen,
     handleTogglePin,

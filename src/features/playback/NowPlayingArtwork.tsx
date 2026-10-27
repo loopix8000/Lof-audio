@@ -13,13 +13,9 @@ export function NowPlayingArtwork() {
     setNowPlayingOpen,
     handleToggleFavorite,
     openPropertiesDialog,
+    handleRowContextMenu,
   } = useAudioAppContext();
   return (<div className="np-hero-pane" ref={npHeroPaneRef}>
-    {activeTrack && (
-      <div className="np-backdrop" aria-hidden="true">
-        <img src={activeCover} alt="" />
-      </div>
-    )}
     <div
       className="np-art-frame"
       style={{ "--np-art-max": `${npArtMax}px` } as React.CSSProperties}
@@ -28,6 +24,7 @@ export function NowPlayingArtwork() {
         className="np-art-img"
         src={activeCover}
         alt=""
+        onContextMenu={(e) => activeTrack && handleRowContextMenu(activeTrack, e)}
       />
     </div>
 
