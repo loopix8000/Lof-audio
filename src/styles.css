@@ -2583,8 +2583,7 @@ button svg {
   border-radius: 0;
   box-shadow: none;
   display: grid;
-  /* Equal side columns keep the controls centered; on wide windows they grow so long titles fit */
-  grid-template-columns: minmax(220px, 1fr) minmax(280px, 640px) minmax(230px, 1fr);
+  grid-template-columns: minmax(0, max-content) minmax(280px, 1fr) 230px;
   align-items: center;
   gap: 14px;
 }
@@ -2642,9 +2641,12 @@ button svg {
 }
 
 .deck-meta {
-  min-width: 120px;
-  max-width: 360px;
-  flex: 1;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.deck-track > .flat-icon-btn {
+  flex-shrink: 0;
 }
 
 .deck-title {
@@ -2703,7 +2705,7 @@ button svg {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  max-width: 800px;
+  max-width: 640px;
   width: 100%;
   justify-self: center;
 }
