@@ -1,4 +1,4 @@
-use super::{tools, Handler};
+use super::{tools, Handler, VERSIONS};
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -15,7 +15,6 @@ use std::{
 
 const MAX_BODY: usize = 8_000_000;
 const MAX_HEADER: usize = 16_384;
-const VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 pub struct ApiServer {
     pub port: u16,
@@ -356,15 +355,7 @@ fn handle(
         return Ok(());
     }
     let result = match method {
-        "initialize" => {
-            let version = params["protocolVersion"]
-                .as_str()
-                .filter(|v| VERSIONS.contains(v))
-                .unwrap_or("2025-11-25");
-            json!({"protocolVersion":version,"capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"lof-audio","version":env!("CARGO_PKG_VERSION")},"instructions":tools::INSTRUCTIONS})
-        }
-        "ping" => json!({}),
-        "tools/list" => json!({"tools":tools::definitions()}),
+        "initialize" | "ping" | "tools/list" => super::discovery_result(method, &params).unwrap(),
         "tools/call" => {
             let Some(name) = params["name"].as_str().filter(|name| {
                 tools::definitions()

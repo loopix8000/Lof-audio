@@ -2067,7 +2067,7 @@ dependencies = [
 
 [[package]]
 name = "lof-audio"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -2089,6 +2089,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "tokio",
+ "toml_edit 0.25.17+spec-1.1.0",
  "walkdir",
 ]
 
@@ -4555,6 +4556,7 @@ dependencies = [
  "indexmap 2.14.2",
  "toml_datetime 1.1.2+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "winnow 1.0.4",
 ]
 

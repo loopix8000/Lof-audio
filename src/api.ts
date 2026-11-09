@@ -145,6 +145,7 @@ export const api = {
   hideLibraryItems: (targets: HideTarget[]): Promise<LibrarySnapshot> => invoke("hide_library_items", { targets }),
   unhideLibraryItem: (id: number): Promise<LibrarySnapshot> => invoke("unhide_library_item", { id }),
   getAutomationInfo: (): Promise<AutomationInfo> => invoke("get_automation_info"),
+  configureCodex: (): Promise<{ changed: boolean; configPath: string; backupPath: string | null }> => invoke("configure_codex"),
   getSkillStatus: (skillsDirectory?: string): Promise<AudioSkillStatus> => invoke("get_audio_skill_status", { skillsDirectory: skillsDirectory ?? null }),
   installSkill: (skillsDirectory: string, expectedRevision: string, expectedInstalledRevision?: string | null): Promise<AudioSkillStatus> =>
     invoke("install_audio_skill", { skillsDirectory, expectedRevision, expectedInstalledRevision: expectedInstalledRevision ?? null }),

@@ -1,3 +1,4 @@
+mod codex;
 pub mod dispatch;
 mod http;
 mod research;
@@ -11,6 +12,22 @@ use std::{future::Future, path::PathBuf, pin::Pin, sync::Arc};
 use tauri::{Emitter, Manager, State};
 
 pub use http::ApiServer;
+pub(super) const VERSIONS: [&str; 4] = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
+
+pub(super) fn discovery_result(method: &str, params: &Value) -> Option<Value> {
+    Some(match method {
+        "initialize" => {
+            let version = params["protocolVersion"]
+                .as_str()
+                .filter(|v| VERSIONS.contains(v))
+                .unwrap_or(VERSIONS[0]);
+            json!({"protocolVersion":version,"capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"lof-audio","version":env!("CARGO_PKG_VERSION")},"instructions":tools::INSTRUCTIONS})
+        }
+        "ping" => json!({}),
+        "tools/list" => json!({"tools":tools::definitions()}),
+        _ => return None,
+    })
+}
 pub type Handler = Arc<
     dyn Fn(String, Value) -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send>>
         + Send
@@ -52,6 +69,14 @@ pub fn get_automation_info(server: State<'_, ApiServer>) -> Result<Value, String
         "toolCount":tools::definitions().as_array().unwrap().len(),
         "mcpConfig":{"mcpServers":{"lof-audio":{"command":executable,"args":["--mcp","--runtime",server.runtime_path]}}}}),
     )
+}
+
+#[tauri::command]
+pub fn configure_codex(
+    app: tauri::AppHandle,
+    server: State<'_, ApiServer>,
+) -> Result<Value, String> {
+    codex::configure(app, server)
 }
 
 #[tauri::command]

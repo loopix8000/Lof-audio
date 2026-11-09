@@ -45,12 +45,32 @@ pub fn run(runtime_path: &Path) -> Result<(), String> {
             }
         };
         let id = message.get("id").cloned();
-        if !message.is_object() || message["jsonrpc"] != "2.0" {
+        if !message.is_object()
+            || message["jsonrpc"] != "2.0"
+            || id
+                .as_ref()
+                .is_some_and(|id| !id.is_null() && !id.is_string() && !id.is_i64() && !id.is_u64())
+        {
             writeln!(stdout, "{}", json!({"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"Invalid Request"}})).map_err(|e| e.to_string())?;
             stdout.flush().map_err(|e| e.to_string())?;
             continue;
         }
-        let result: Result<Option<Value>, String> = runtime.block_on(async {
+        // 연결 준비는 앱 실행 여부와 무관하게 처리하고, 실제 도구 호출만 앱에 전달한다.
+        if let Some(output) = local_response(&message) {
+            writeln!(stdout, "{output}").map_err(|e| e.to_string())?;
+            stdout.flush().map_err(|e| e.to_string())?;
+            if message["method"] == "initialize" {
+                protocol = output["result"]["protocolVersion"]
+                    .as_str()
+                    .unwrap_or("")
+                    .into();
+            }
+            continue;
+        }
+        if id.is_none() {
+            continue;
+        }
+        let result: Result<Value, String> = runtime.block_on(async {
             let connection: Value = serde_json::from_slice(
                 &std::fs::read(runtime_path).map_err(|_| "앱의 연결 파일을 읽지 못했습니다.")?,
             )
@@ -79,24 +99,15 @@ pub fn run(runtime_path: &Path) -> Result<(), String> {
             if !response.status().is_success() {
                 return Err(format!("HTTP {}", response.status().as_u16()));
             }
-            if id.is_none() {
-                return Ok(None);
-            }
             let value: Value = response
                 .json()
                 .await
                 .map_err(|_| "잘못된 MCP 응답입니다.")?;
-            if message["method"] == "initialize" {
-                protocol = value["result"]["protocolVersion"]
-                    .as_str()
-                    .unwrap_or("")
-                    .into();
-            }
-            Ok(Some(value))
+            Ok(value)
         });
         let output=match result {
-            Ok(value)=>value,
-            Err(message)=>id.map(|id|json!({"jsonrpc":"2.0","id":id,"error":{"code":-32603,"message":format!("Lof Audio 앱 실행 상태를 확인하세요. {message}")}})),
+            Ok(value)=>Some(value),
+            Err(message)=>id.map(|id|json!({"jsonrpc":"2.0","id":id,"result":{"content":[{"type":"text","text":format!("Lof Audio 앱 실행 상태를 확인하세요. {message}")}],"isError":true}})),
         };
         if let Some(value) = output {
             writeln!(stdout, "{value}").map_err(|e| e.to_string())?;
@@ -104,4 +115,24 @@ pub fn run(runtime_path: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn local_response(message: &Value) -> Option<Value> {
+    let id = message.get("id")?;
+    let params = message.get("params").cloned().unwrap_or_else(|| json!({}));
+    if !params.is_object() {
+        return Some(
+            json!({"jsonrpc":"2.0","id":id,"error":{"code":-32602,"message":"요청 매개변수는 객체여야 합니다."}}),
+        );
+    }
+    let method = message["method"].as_str().unwrap_or("");
+    if let Some(result) = super::discovery_result(method, &params) {
+        return Some(json!({"jsonrpc":"2.0","id":id,"result":result}));
+    }
+    if method != "tools/call" {
+        return Some(
+            json!({"jsonrpc":"2.0","id":id,"error":{"code":-32601,"message":"지원하지 않는 메서드입니다."}}),
+        );
+    }
+    None
 }

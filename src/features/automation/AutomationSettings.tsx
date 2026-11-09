@@ -10,6 +10,8 @@ export function AutomationSettings() {
   const [skill, setSkill] = useState<AudioSkillStatus | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [codexBusy, setCodexBusy] = useState(false);
+  const [codexBackup, setCodexBackup] = useState<string | null>(null);
 
   useEffect(() => {
     if (settingsTab !== "automation") return;
@@ -37,6 +39,15 @@ export function AutomationSettings() {
     } catch (error) { notify(`스킬 설치 실패: ${error}`); }
     finally { setBusy(false); }
   };
+  const configureCodex = async () => {
+    setCodexBusy(true);
+    try {
+      const result = await api.configureCodex();
+      setCodexBackup(result.backupPath);
+      notify(result.changed ? "Codex 연결을 설정했습니다. Codex를 다시 시작하세요." : "Codex 연결이 이미 설정되어 있습니다.");
+    } catch (error) { notify(`Codex 연결 설정 실패: ${error}`); }
+    finally { setCodexBusy(false); }
+  };
 
   if (settingsTab !== "automation") return null;
   return <>
@@ -48,9 +59,16 @@ export function AutomationSettings() {
       <span className="settings-value">{info ? `${info.toolCount}개 도구` : error || "불러오는 중..."}</span>
     </div>
     <div className="automation-buttons">
+      <button className="ui-btn" disabled={!info || codexBusy} onClick={() => void configureCodex()}><RefreshCw size={13} className={codexBusy ? "spin" : undefined} /> Codex 연결 설정</button>
       <button className="ui-btn" disabled={!info} onClick={() => info && void copy(info.mcpConfig)}><Copy size={13} /> MCP 설정 복사</button>
       <button className="ui-btn" disabled={!info} onClick={() => info && void copy({ mcpServers: { "lof-audio": { url: info.mcpUrl, headers: info.headers } } })}><Copy size={13} /> HTTP MCP 설정 복사</button>
       <button className="ui-btn" disabled={!info} onClick={() => info && void copy({ url: info.url, headers: info.headers })}><Copy size={13} /> API 연결 정보 복사</button>
+    </div>
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <span className="settings-row-desc">Codex 연결 설정은 기존 Lof Audio 등록을 갱신하고 설정 원본을 백업합니다. 앱이 꺼져 있어도 연결 준비를 마치며, 음악 도구를 사용할 때 앱을 실행하면 됩니다.</span>
+        {codexBackup && <span className="settings-row-desc settings-path">기존 Codex 설정 백업: {codexBackup}</span>}
+      </div>
     </div>
     <div className="settings-row">
       <div className="settings-row-text">

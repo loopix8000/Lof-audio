@@ -33,7 +33,6 @@ async function exercise(command, args) {
       await writeFile(runtime, JSON.stringify({ port: server.address().port, token }));
       return requests;
     };
-    const first = await serve();
     child = spawn(command, [...args, "--runtime", runtime], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
     child.stderr.on("data", data => { stderr += data; });
@@ -53,14 +52,33 @@ async function exercise(command, args) {
     const initialized = await next();
     assert.ok(initialized.result, JSON.stringify(initialized));
     assert.equal(initialized.result.protocolVersion, "2025-11-25");
+    assert.equal(initialized.result.serverInfo.name, "lof-audio");
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "ping" }) + "\n");
     assert.equal((await next()).id, 2);
-    assert.equal(first[1].protocol, "2025-11-25");
-    assert.equal(first[2].message.id, 2);
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list" }) + "\n");
+    const available = await next();
+    assert.ok(available.result.tools.some(tool => tool.name === "workspace_list"));
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "workspace_list", arguments: {} } }) + "\n");
+    const offline = await next();
+    assert.equal(offline.result.isError, true);
+    assert.match(offline.result.content[0].text, /Lof Audio 앱 실행 상태/);
+    const first = await serve();
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "workspace_list", arguments: {} } }) + "\n");
+    assert.equal((await next()).id, 5);
+    assert.equal(first.length, 1);
+    assert.equal(first[0].protocol, "2025-11-25");
+    assert.equal(first[0].message.id, 5);
     const restarted = await serve();
-    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 3, method: "ping" }) + "\n");
-    assert.equal((await next()).id, 3);
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "workspace_list", arguments: {} } }) + "\n");
+    assert.equal((await next()).id, 6);
+    assert.equal(restarted.length, 1);
+    await writeFile(runtime, JSON.stringify({ port: 0, token: tokens[1] }));
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "workspace_list", arguments: {} } }) + "\n");
+    assert.equal((await next()).result.isError, true);
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 8, method: "tools/list" }) + "\n");
+    assert.deepEqual((await next()).result.tools, available.result.tools);
+    assert.equal(first.length, 1);
     assert.equal(restarted.length, 1);
     const exit = once(child, "exit"); child.stdin.end();
     const [code] = await exit; assert.equal(code, 0, stderr);
@@ -73,8 +91,8 @@ async function exercise(command, args) {
   }
 }
 
-test("Node MCP bridge handles framing, notifications and runtime changes without logging credentials", () => exercise(process.execPath, ["tools/mcp.mjs"]));
-test("native MCP bridge handles framing, notifications and runtime changes", { skip: !process.env.LOF_AUDIO_TEST_BINARY }, () => exercise(process.env.LOF_AUDIO_TEST_BINARY, ["--mcp"]));
+test("Node MCP bridge initializes offline and reconnects after app startup and restart without logging credentials", () => exercise(process.execPath, ["tools/mcp.mjs"]));
+test("native MCP bridge initializes offline and reconnects after app startup and restart", { skip: !process.env.LOF_AUDIO_TEST_BINARY }, () => exercise(process.env.LOF_AUDIO_TEST_BINARY, ["--mcp"]));
 test("skill tool reference matches the native server schema", { skip: !process.env.LOF_AUDIO_TEST_BINARY }, async () => {
   const native = spawnSync(process.env.LOF_AUDIO_TEST_BINARY, ["--export-tools"], { encoding: "utf8", windowsHide: true });
   assert.equal(native.status, 0, native.stderr);
