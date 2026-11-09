@@ -40,7 +40,9 @@ export function LibrarySidebar() {
         <Search size={13} className="sidebar-search-icon" />
         <input
           className="sidebar-search-input"
-          placeholder="곡, 아티스트, 앨범 검색..."
+          placeholder="곡, 폴더, 파일명 검색..."
+          aria-label="곡, 아티스트, 앨범, 폴더, 파일명 검색"
+          title="곡, 아티스트, 앨범, 장르, 폴더 경로, 파일명 검색"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />

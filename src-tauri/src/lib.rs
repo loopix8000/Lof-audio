@@ -2,6 +2,7 @@ pub mod audio;
 mod automation;
 pub mod db;
 mod metadata;
+mod lyrics;
 pub mod models;
 mod operations;
 pub mod scanner;
@@ -186,10 +187,13 @@ async fn get_app_info(
     })
 }
 
-/// Opens the app data folder (library DB lives here) in the OS file manager.
-#[tauri::command]
-async fn reveal_data_dir(state: State<'_, AppState>) -> Result<(), String> {
-    let dir = &state.app_data_dir;
+/// 지정한 폴더를 운영체제의 파일 탐색기에서 엽니다.
+fn open_folder_in_file_manager(dir: &Path) -> Result<(), String> {
+    if !dir.is_absolute() || !dir.is_dir() {
+        return Err("폴더가 없거나 접근할 수 없습니다.".to_string());
+    }
+    #[cfg(target_os = "windows")]
+    let dir = PathBuf::from(dir.as_os_str().to_string_lossy().replace('/', "\\"));
     #[cfg(target_os = "windows")]
     let program = "explorer";
     #[cfg(target_os = "macos")]
@@ -201,6 +205,21 @@ async fn reveal_data_dir(state: State<'_, AppState>) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("폴더 열기 실패: {}", e))?;
     Ok(())
+}
+
+/// 라이브러리 데이터가 저장된 폴더를 엽니다.
+#[tauri::command]
+async fn reveal_data_dir(state: State<'_, AppState>) -> Result<(), String> {
+    open_folder_in_file_manager(&state.app_data_dir)
+}
+
+#[tauri::command]
+async fn open_folder_in_explorer(folder_path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        open_folder_in_file_manager(Path::new(&folder_path))
+    })
+    .await
+    .map_err(|e| format!("폴더 열기 실패: {}", e))?
 }
 
 #[tauri::command]
@@ -534,6 +553,7 @@ pub fn run() {
             rescan_library,
             get_app_info,
             reveal_data_dir,
+            open_folder_in_explorer,
             updater::update_check,
             import_files,
             remove_folder,

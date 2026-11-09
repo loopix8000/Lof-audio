@@ -139,7 +139,8 @@ export function useLibraryView({
   }, [tracks, searchQuery]);
 
   const directoryFolders = useMemo(() => folderLocation.children.filter(folder =>
-    !searchQuery.trim() || searchFilteredTracks.some(track => isFolderWithin(track.folderPath, folder.path))
+    !searchQuery.trim() || folder.path.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
+    searchFilteredTracks.some(track => isFolderWithin(track.folderPath, folder.path))
   ), [folderLocation, searchQuery, searchFilteredTracks]);
 
   const artistCards = useMemo(() => {

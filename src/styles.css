@@ -1957,6 +1957,7 @@ button svg {
 }
 
 .lyric-line-item {
+  white-space: pre-line;
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-muted);
@@ -2350,6 +2351,7 @@ button svg {
 }
 
 .np-lyric-line {
+  white-space: pre-line;
   flex-shrink: 0;
   width: 100%;
   max-width: 560px;

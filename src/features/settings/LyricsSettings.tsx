@@ -24,9 +24,9 @@ export function LyricsSettings() {
     <>
       <label className="settings-row">
         <div className="settings-row-text">
-          <span className="settings-row-title">.lrc 파일 함께 저장</span>
+          <span className="settings-row-title">가사 파일 함께 저장</span>
           <span className="settings-row-desc">
-            싱크 가사를 저장할 때 음악 파일 옆에 같은 이름의 .lrc 파일도 만듭니다.
+            싱크 가사를 저장할 때 음악 파일 옆에 같은 이름의 .lrc 또는 .vtt 파일도 만듭니다.
           </span>
         </div>
         <input

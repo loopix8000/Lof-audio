@@ -92,7 +92,7 @@ pub fn read_track_from_path(path: &Path) -> Option<Track> {
         if let Some(lyr) = tag.get_string(&ItemKey::Lyrics) {
             let trimmed = lyr.trim().to_string();
             if !trimmed.is_empty() {
-                if is_lrc_format(&trimmed) {
+                if is_lrc_format(&trimmed) || crate::lyrics::is_vtt(&trimmed) {
                     synced_lyrics = Some(trimmed.clone());
                 }
                 plain_lyrics = Some(strip_lrc_timestamps(&trimmed));
@@ -109,14 +109,15 @@ pub fn read_track_from_path(path: &Path) -> Option<Track> {
         album_artist = artist.clone();
     }
 
-    // Check sidecar .lrc file
-    let lrc_path = path.with_extension("lrc");
-    if lrc_path.exists() {
-        if let Ok(lrc_content) = fs::read_to_string(&lrc_path) {
-            let trimmed = lrc_content.trim().to_string();
+    // 같은 이름의 외부 가사는 LRC, VTT 순서로 확인합니다.
+    for extension in ["lrc", "vtt"] {
+        if let Ok(content) = fs::read_to_string(path.with_extension(extension)) {
+            let trimmed = content.trim_start_matches('\u{feff}').trim().to_string();
+            if extension == "vtt" && crate::lyrics::parse_vtt(&trimmed).is_empty() { continue; }
             if !trimmed.is_empty() {
                 synced_lyrics = Some(trimmed.clone());
                 plain_lyrics = Some(strip_lrc_timestamps(&trimmed));
+                break;
             }
         }
     }
@@ -232,9 +233,25 @@ fn write_track_inner(track: &Track, save_lrc_file: bool) -> Result<(), String> {
             bytes,
         ));
     }
-    let lrc_path = path.with_extension("lrc");
-    if (save_lrc_file || lrc_path.exists()) && lrc_path.is_dir() {
-        return Err("LRC 경로가 디렉터리여서 저장할 수 없습니다.".into());
+    let synced = track.synced_lyrics.as_deref().filter(|text| !text.trim().is_empty());
+    let is_vtt = synced.is_some_and(crate::lyrics::is_vtt);
+    if is_vtt && synced.is_some_and(|text| crate::lyrics::parse_vtt(text).is_empty()) {
+        return Err("VTT 가사에 올바른 시간 구간이 없습니다.".into());
+    }
+    let mut sidecars = Vec::new();
+    for extension in ["lrc", "vtt"] {
+        let sidecar = path.with_extension(extension);
+        let create = save_lrc_file && (extension == "vtt") == is_vtt;
+        if !create && !sidecar.exists() { continue; }
+        if sidecar.is_dir() {
+            return Err(format!("{} 경로가 디렉터리여서 저장할 수 없습니다.", extension.to_uppercase()));
+        }
+        let content = synced.map(|text| match (extension, is_vtt) {
+            ("lrc", true) => crate::lyrics::vtt_to_lrc(text),
+            ("vtt", false) => crate::lyrics::lrc_to_vtt(text, track.duration_secs),
+            _ => text.to_string(),
+        });
+        sidecars.push((sidecar, content));
     }
     // 기존 ID3v1 등 보조 태그는 원시 바이트 그대로 두고 기본 태그만 저장한다.
     // 재생 파일의 해제는 오디오 스레드에서 확인하고 완성된 파일만 교체한다.
@@ -242,19 +259,15 @@ fn write_track_inner(track: &Track, save_lrc_file: bool) -> Result<(), String> {
         tag.save_to(file, WriteOptions::default())
             .map_err(|e| format!("태그 저장 실패 ({}): {}", track.file_name, e))
     })?;
-    // 새 사이드카 생성을 꺼도 기존 파일은 현재 가사와 일치시킨다.
-    if save_lrc_file || lrc_path.exists() {
-        if let Some(lrc) = track
-            .synced_lyrics
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
-            fs::write(&lrc_path, lrc).map_err(|e| format!("LRC 저장 실패: {}", e))?;
+    // 새 사이드카 생성을 꺼도 기존 LRC와 VTT는 현재 가사와 일치시킵니다.
+    for (sidecar, content) in sidecars {
+        if let Some(content) = content {
+            fs::write(&sidecar, content).map_err(|e| format!("가사 파일 저장 실패: {}", e))?;
         } else {
-            match fs::remove_file(&lrc_path) {
+            match fs::remove_file(&sidecar) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => return Err(format!("이전 LRC 제거 실패: {}", e)),
+                Err(e) => return Err(format!("이전 가사 파일 제거 실패: {}", e)),
             }
         }
     }
@@ -336,6 +349,7 @@ pub fn is_lrc_format(text: &str) -> bool {
 }
 
 pub fn strip_lrc_timestamps(text: &str) -> String {
+    if crate::lyrics::is_vtt(text) { return crate::lyrics::plain_vtt(text); }
     let mut out = Vec::new();
     for line in text.lines() {
         let mut s = line.trim();
@@ -532,6 +546,46 @@ mod tests {
         )
         .unwrap();
         (dir, path)
+    }
+
+    #[test]
+    fn vtt_sidecar_loads_and_stays_current_after_editing_or_clearing() {
+        let (_dir, path) = audio_copy();
+        let original = "WEBVTT\n\n00:01.000 --> 00:03.000\n<v 가수>첫 줄\n번역 &amp; 끝\n";
+        fs::write(path.with_extension("vtt"), original).unwrap();
+        let mut track = read_track_from_path(&path).unwrap();
+        assert_eq!(track.synced_lyrics.as_deref(), Some(original.trim()));
+        assert_eq!(track.plain_lyrics.as_deref(), Some("첫 줄\n번역 & 끝"));
+        track.synced_lyrics = Some(original.replace("첫 줄", "수정됨"));
+        write_track(&track, true).unwrap();
+        assert!(!path.with_extension("lrc").exists());
+        assert!(read_track_from_path(&path).unwrap().plain_lyrics.unwrap().contains("수정됨"));
+        track.synced_lyrics = Some("[00:01.250]LRC로 변경\n[00:02.500]".into());
+        write_track(&track, false).unwrap();
+        let reread = read_track_from_path(&path).unwrap();
+        assert_eq!(reread.plain_lyrics.as_deref(), Some("LRC로 변경"));
+        let cues = crate::lyrics::parse_vtt(&reread.synced_lyrics.unwrap());
+        assert_eq!(cues[0].start, 1.25);
+        assert_eq!(cues[0].end, 2.5);
+        track.synced_lyrics = None;
+        track.plain_lyrics = None;
+        write_track(&track, false).unwrap();
+        assert!(!path.with_extension("vtt").exists());
+        assert!(read_track_from_path(&path).unwrap().synced_lyrics.is_none());
+    }
+
+    #[test]
+    fn lrc_sidecar_keeps_priority_and_vtt_updates_both_existing_formats() {
+        let (_dir, path) = audio_copy();
+        let vtt = "WEBVTT\n\n00:01.000 --> 00:03.000\nVTT 가사\n번역\n";
+        fs::write(path.with_extension("vtt"), vtt).unwrap();
+        fs::write(path.with_extension("lrc"), "[00:01.000]LRC 우선").unwrap();
+        let mut track = read_track_from_path(&path).unwrap();
+        assert_eq!(track.plain_lyrics.as_deref(), Some("LRC 우선"));
+        track.synced_lyrics = Some(vtt.into());
+        write_track(&track, false).unwrap();
+        assert_eq!(read_track_from_path(&path).unwrap().plain_lyrics.as_deref(), Some("VTT 가사\n번역"));
+        assert_eq!(fs::read_to_string(path.with_extension("vtt")).unwrap(), vtt);
     }
 
     #[test]

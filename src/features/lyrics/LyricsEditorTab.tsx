@@ -142,7 +142,7 @@ export function LyricsEditorTab() {
         <textarea
           className="form-textarea lyrics-editor-textarea"
           aria-label="가사 내용"
-          placeholder="일반 가사 또는 [00:12.34] 형식의 LRC 가사 입력..."
+          placeholder="일반 가사, LRC 또는 WEBVTT 형식의 가사 입력..."
           value={lyricDraft}
           onChange={(e) => setLyricDraft(e.target.value)}
           disabled={lrcLoading || lyricsSaving}

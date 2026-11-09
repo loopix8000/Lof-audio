@@ -9,7 +9,7 @@ pub fn revision(track: &Track) -> String {
     value.as_object_mut().unwrap().remove("isFavorite");
     let stamp = crate::db::FileStamp::of_path(std::path::Path::new(&track.file_path))
         .ok()
-        .map(|s| (s.size, s.mtime, s.lrc_size, s.lrc_mtime));
+        .map(|s| (s.size, s.mtime, s.lrc_size, s.lrc_mtime, s.vtt_size, s.vtt_mtime));
     hex::encode(Sha256::digest(
         serde_json::to_vec(&(value, stamp)).expect("Metadata is serializable"),
     ))

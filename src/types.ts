@@ -192,6 +192,7 @@ export interface ConfirmTrackMatchItem {
 
 export interface LyricLine {
   timeSecs: number;
+  endTimeSecs?: number;
   text: string;
 }
 

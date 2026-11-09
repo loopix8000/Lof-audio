@@ -1,4 +1,4 @@
-import { Edit3, EyeOff, ListEnd, ListStart, Play, Search, Trash2, Unlink } from "lucide-react";
+import { Edit3, EyeOff, FolderOpen, ListEnd, ListStart, Play, Search, Trash2, Unlink } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import { api } from "../../api";
 import { useAudioAppContext } from "../../app/AppContext";
@@ -69,6 +69,14 @@ export function CollectionContextMenu() {
       {target.kind === "album" && (
         <button className="native-menu-item" disabled={targetIds.length === 0} onClick={() => { close(); openAlbumMatchDialog(targetIds); }}>
           <Search size={13} aria-hidden="true" /><span>앨범 정보 조회…</span>
+        </button>
+      )}
+      {target.kind === "folder" && (
+        <button className="native-menu-item" onClick={() => {
+          close();
+          void api.openFolderInExplorer(target.value).catch(error => notify(`폴더 열기 실패: ${error}`));
+        }}>
+          <FolderOpen size={13} aria-hidden="true" /><span>파일 탐색기에서 열기</span>
         </button>
       )}
       <div className="native-menu-sep" />

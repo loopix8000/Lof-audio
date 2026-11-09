@@ -187,6 +187,9 @@ export const api = {
   revealDataDir: (): Promise<void> =>
     invoke("reveal_data_dir"),
 
+  openFolderInExplorer: (folderPath: string): Promise<void> =>
+    invoke("open_folder_in_explorer", { folderPath }),
+
   importFiles: (filePaths: string[], workspaceId: number): Promise<LibrarySnapshot> =>
     invoke("import_files", { filePaths, workspaceId }),
 

@@ -155,7 +155,7 @@ export function useLyricsEditor({
         if (!isCurrent()) return;
         const draft = lyricsEntries[track.id].draft;
         try {
-          const hasTime = /\[\d{1,3}:\d{2}/.test(draft);
+          const hasTime = /\[\d{1,3}:\d{2}/.test(draft) || /^\uFEFF?WEBVTT(?:[ \t]|\r|\n|$)/.test(draft);
           const updated = await api.applyLyricsToTrack(track.id, hasTime ? draft : null, draft, saveLrcFile);
           setTracks(previous => previous.map(item => item.id === updated.id ? updated : item));
           if (!isCurrent()) return;

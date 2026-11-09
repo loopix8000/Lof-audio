@@ -26,6 +26,18 @@ const deferred = () => {
   return { promise, resolve };
 };
 
+test("VTT 초안은 시간 정보가 있는 가사로 저장한다", async () => {
+  const vtt = "WEBVTT\n\n00:01.000 --> 00:03.000\n가사\n";
+  const calls = [];
+  const view = editor({ applyLyricsToTrack: async (...args) => {
+    calls.push(args);
+    return { ...tracks[0], syncedLyrics: vtt, plainLyrics: "가사" };
+  } });
+  view.render().setLyricDraft(vtt);
+  await view.render().handleSaveEditedLyrics();
+  assert.deepEqual(calls, [[1, vtt, vtt, true]]);
+});
+
 function editor(api) {
   const state = {
     lyricsEntries: createLyricsEntries(tracks),

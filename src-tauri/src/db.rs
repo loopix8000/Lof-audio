@@ -15,6 +15,8 @@ pub struct FileStamp {
     pub mtime: i64,
     pub lrc_size: Option<i64>,
     pub lrc_mtime: Option<i64>,
+    pub vtt_size: Option<i64>,
+    pub vtt_mtime: Option<i64>,
 }
 
 impl FileStamp {
@@ -30,19 +32,28 @@ impl FileStamp {
             mtime,
             lrc_size: None,
             lrc_mtime: None,
+            vtt_size: None,
+            vtt_mtime: None,
         }
     }
 
     pub fn of_path(path: &Path) -> std::io::Result<Self> {
         let mut stamp = Self::of(&std::fs::metadata(path)?);
-        match std::fs::metadata(path.with_extension("lrc")) {
-            Ok(meta) => {
-                let lrc = Self::of(&meta);
-                stamp.lrc_size = Some(lrc.size);
-                stamp.lrc_mtime = Some(lrc.mtime);
+        for extension in ["lrc", "vtt"] {
+            match std::fs::metadata(path.with_extension(extension)) {
+                Ok(meta) => {
+                    let sidecar = Self::of(&meta);
+                    if extension == "lrc" {
+                        stamp.lrc_size = Some(sidecar.size);
+                        stamp.lrc_mtime = Some(sidecar.mtime);
+                    } else {
+                        stamp.vtt_size = Some(sidecar.size);
+                        stamp.vtt_mtime = Some(sidecar.mtime);
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e),
         }
         Ok(stamp)
     }
@@ -60,6 +71,7 @@ type ExistingTrack = (
     i64,
     bool,
     u32,
+    bool,
 );
 fn folder_bounds(path: &str) -> (String, String) {
     let root = path.replace('\\', "/").trim_end_matches('/').to_string();
@@ -235,6 +247,8 @@ impl Database {
         for (name, definition) in [
             ("lrc_size", "INTEGER"),
             ("lrc_mtime", "INTEGER"),
+            ("vtt_size", "INTEGER"),
+            ("vtt_mtime", "INTEGER"),
             ("metadata_revision", "INTEGER NOT NULL DEFAULT 0"),
             ("cover_present", "INTEGER"),
         ] {
@@ -323,7 +337,7 @@ impl Database {
         };
         let existing: Option<ExistingTrack> = conn
             .query_row(
-                "SELECT id, cover_data_url, synced_lyrics, plain_lyrics, lyric_offset_ms, is_favorite, play_count FROM tracks WHERE file_path = ?1",
+                "SELECT id, cover_data_url, synced_lyrics, plain_lyrics, lyric_offset_ms, is_favorite, play_count, (lrc_size IS NOT NULL OR vtt_size IS NOT NULL) FROM tracks WHERE file_path = ?1",
                 params![track.file_path],
                 |row| {
                     Ok((
@@ -334,17 +348,20 @@ impl Database {
                         row.get(4)?,
                         row.get::<_, i64>(5)? != 0,
                         row.get(6)?,
+                        row.get(7)?,
                     ))
                 },
             )
             .optional()
             .map_err(|e| e.to_string())?;
 
-        if let Some((id, old_cover, old_synced, old_plain, old_offset, is_fav, play_cnt)) = existing
+        if let Some((id, old_cover, old_synced, old_plain, old_offset, is_fav, play_cnt, had_sidecar)) = existing
         {
             let cover = track.cover_data_url.clone().or(old_cover);
-            let synced = track.synced_lyrics.clone().or(old_synced);
-            let plain = track.plain_lyrics.clone().or(old_plain);
+            // 외부 가사가 제거되었으면 삭제 전의 캐시를 다시 살리지 않습니다.
+            let use_fresh_lyrics = had_sidecar && stamp.is_some();
+            let synced = if use_fresh_lyrics { track.synced_lyrics.clone() } else { track.synced_lyrics.clone().or(old_synced) };
+            let plain = if use_fresh_lyrics { track.plain_lyrics.clone() } else { track.plain_lyrics.clone().or(old_plain) };
             conn.execute(
                 "UPDATE tracks SET
                     file_name = ?1,
@@ -371,6 +388,8 @@ impl Database {
                     file_mtime = COALESCE(?23, file_mtime),
                     lrc_size = CASE WHEN ?22 IS NOT NULL THEN ?24 ELSE lrc_size END,
                     lrc_mtime = CASE WHEN ?22 IS NOT NULL THEN ?25 ELSE lrc_mtime END,
+                    vtt_size = CASE WHEN ?22 IS NOT NULL THEN ?26 ELSE vtt_size END,
+                    vtt_mtime = CASE WHEN ?22 IS NOT NULL THEN ?27 ELSE vtt_mtime END,
                     metadata_revision = metadata_revision + 1,
                     cover_present = (?15 IS NOT NULL AND length(?15) > 0)
                 WHERE id = ?21",
@@ -399,7 +418,9 @@ impl Database {
                     size,
                     mtime,
                     stamp.and_then(|s| s.lrc_size),
-                    stamp.and_then(|s| s.lrc_mtime)
+                    stamp.and_then(|s| s.lrc_mtime),
+                    stamp.and_then(|s| s.vtt_size),
+                    stamp.and_then(|s| s.vtt_mtime)
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -410,12 +431,12 @@ impl Database {
                     file_path, file_name, folder_path, title, artist, album, album_artist,
                     track_number, year, genre, duration_secs, bitrate, sample_rate, channels,
                     format, cover_data_url, synced_lyrics, plain_lyrics, lyric_offset_ms,
-                    mbid_recording, mbid_release, is_favorite, play_count, file_size, file_mtime, lrc_size, lrc_mtime, cover_present
+                    mbid_recording, mbid_release, is_favorite, play_count, file_size, file_mtime, lrc_size, lrc_mtime, vtt_size, vtt_mtime, cover_present
                 ) VALUES (
                     ?1, ?2, ?3, ?4, ?5, ?6, ?7,
                     ?8, ?9, ?10, ?11, ?12, ?13, ?14,
                     ?15, ?16, ?17, ?18, ?19,
-                    ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, (?16 IS NOT NULL AND length(?16) > 0)
+                    ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, (?16 IS NOT NULL AND length(?16) > 0)
                 )",
                 params![
                     track.file_path,
@@ -444,7 +465,9 @@ impl Database {
                     size,
                     mtime,
                     stamp.and_then(|s| s.lrc_size),
-                    stamp.and_then(|s| s.lrc_mtime)
+                    stamp.and_then(|s| s.lrc_mtime),
+                    stamp.and_then(|s| s.vtt_size),
+                    stamp.and_then(|s| s.vtt_mtime)
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -460,7 +483,7 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let (root, prefix) = folder_bounds(root);
         let sql = format!(
-            "SELECT id, file_path, file_size, file_mtime, lrc_size, lrc_mtime FROM tracks WHERE {}",
+            "SELECT id, file_path, file_size, file_mtime, lrc_size, lrc_mtime, vtt_size, vtt_mtime FROM tracks WHERE {}",
             folder_predicate("folder_path")
         );
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -474,6 +497,8 @@ impl Database {
                         mtime,
                         lrc_size: row.get(4)?,
                         lrc_mtime: row.get(5)?,
+                        vtt_size: row.get(6)?,
+                        vtt_mtime: row.get(7)?,
                     }),
                     _ => None,
                 };
@@ -923,6 +948,25 @@ mod tests {
         assert_ne!(first, FileStamp::of_path(&path).unwrap());
         std::fs::remove_file(path.with_extension("lrc")).unwrap();
         assert_eq!(original, FileStamp::of_path(&path).unwrap());
+        std::fs::write(path.with_extension("vtt"), "WEBVTT\n\n00:01.000 --> 00:03.000\n가사\n").unwrap();
+        let vtt = FileStamp::of_path(&path).unwrap();
+        assert_ne!(original, vtt);
+        let db = Database::new(Path::new(":memory:")).unwrap();
+        let file_path = path.to_string_lossy().to_string();
+        let mut track = sample_track(&file_path);
+        track.synced_lyrics = Some("WEBVTT\n\n00:01.000 --> 00:03.000\n가사\n".into());
+        track.plain_lyrics = Some("가사".into());
+        let id = db.upsert_tracks(&[(track, vtt)]).unwrap()[0];
+        let cached = db.get_file_stamps_under(&sample_track(&file_path).folder_path).unwrap();
+        assert_eq!(cached.get(&file_path).unwrap().1, Some(vtt));
+        std::fs::write(path.with_extension("vtt"), "WEBVTT\n\n00:01.000 --> 00:03.000\n수정한 가사\n").unwrap();
+        assert_ne!(vtt, FileStamp::of_path(&path).unwrap());
+        std::fs::remove_file(path.with_extension("vtt")).unwrap();
+        assert_eq!(original, FileStamp::of_path(&path).unwrap());
+        db.upsert_tracks(&[(sample_track(&file_path), original)]).unwrap();
+        let reread = db.get_public_track(id).unwrap();
+        assert!(reread.synced_lyrics.is_none());
+        assert!(reread.plain_lyrics.is_none());
     }
 
     #[test]
@@ -936,6 +980,8 @@ mod tests {
             mtime: 20,
             lrc_size: None,
             lrc_mtime: None,
+            vtt_size: None,
+            vtt_mtime: None,
         };
 
         db.upsert_tracks(&[(sample_track(fp), stamp)]).unwrap();

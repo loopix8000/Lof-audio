@@ -90,7 +90,9 @@ export function CompactLibrary() {
         <input
           className="form-field"
           style={{ height: 26, fontSize: 12 }}
-          placeholder="곡, 앨범, 아티스트 검색..."
+          placeholder="곡, 폴더, 파일명 검색..."
+          aria-label="곡, 아티스트, 앨범, 폴더, 파일명 검색"
+          title="곡, 아티스트, 앨범, 장르, 폴더 경로, 파일명 검색"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           autoFocus

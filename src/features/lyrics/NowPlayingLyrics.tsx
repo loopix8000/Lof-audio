@@ -23,7 +23,7 @@ export function NowPlayingLyrics() {
   } = useAudioAppContext();
   useEffect(() => {
     const box = npLyricsRef.current;
-    if (!box || lyricLines.length === 0) return;
+    if (!box || lyricLines.length === 0 || activeLyricIdx < 0) return;
     const centerLine = (behavior: ScrollBehavior) => {
       const line = box.querySelector<HTMLElement>(`[data-lrc-idx="${Math.max(0, activeLyricIdx)}"]`);
       if (!line) return;

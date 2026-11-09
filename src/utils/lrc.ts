@@ -2,8 +2,35 @@ import { LyricLine } from "../types";
 
 const TIME_REGEX = /\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
 
+export function parseVtt(text: string | null | undefined, offsetMs = 0): LyricLine[] {
+  if (!text || !/^\uFEFF?WEBVTT(?:[ \t].*)?(?:\r?\n|\r|$)/.test(text)) return [];
+  const timestamp = (value: string): number | null => {
+    const match = /^(?:(\d{2,}):)?(\d{2}):(\d{2})\.(\d{3})$/.exec(value);
+    if (!match || Number(match[2]) >= 60 || Number(match[3]) >= 60) return null;
+    const time = Number(match[1] || 0) * 3600 + Number(match[2]) * 60 + Number(match[3]) + Number(match[4]) / 1000;
+    return Number.isFinite(time) ? time : null;
+  };
+  const entities: Record<string, string> = { lt: "<", gt: ">", amp: "&", nbsp: "\u00a0", lrm: "\u200e", rlm: "\u200f" };
+  const lines: LyricLine[] = [];
+  for (const block of text.replace(/\r\n?/g, "\n").split(/\n(?:[ \t]*\n)+/)) {
+    const raw = block.split("\n");
+    if (/^(?:WEBVTT(?:[ \t]|$)|NOTE(?:[ \t]|$)|STYLE$|REGION$)/.test(raw[0].replace(/^\uFEFF/, ""))) continue;
+    const index = raw[0].includes("-->") ? 0 : 1;
+    const match = /^\s*(\S+)\s+-->\s+(\S+)(?:[ \t].*)?$/.exec(raw[index] || "");
+    if (!match) continue;
+    const start = timestamp(match[1]);
+    const end = timestamp(match[2]);
+    if (start === null || end === null || end <= start) continue;
+    const content = raw.slice(index + 1).join("\n").replace(/<[^>]*>/g, "")
+      .replace(/&(lt|gt|amp|nbsp|lrm|rlm);/g, (_, name: string) => entities[name]).trim();
+    lines.push({ timeSecs: Math.max(0, start + offsetMs / 1000), endTimeSecs: Math.max(0, end + offsetMs / 1000), text: content });
+  }
+  return lines.sort((a, b) => a.timeSecs - b.timeSecs);
+}
+
 export function parseLrc(lrcText: string | null | undefined, offsetMs = 0): LyricLine[] {
   if (!lrcText || !lrcText.trim()) return [];
+  if (/^\uFEFF?WEBVTT(?:[ \t]|\r|\n|$)/.test(lrcText)) return parseVtt(lrcText, offsetMs);
 
   const lines: LyricLine[] = [];
   const embeddedOffsets = [...lrcText.matchAll(/\[offset:([+-]?\d+)\]/gi)];
@@ -38,7 +65,14 @@ export function parseLrc(lrcText: string | null | undefined, offsetMs = 0): Lyri
   }
 
   lines.sort((a, b) => a.timeSecs - b.timeSecs);
-  return lines;
+  // 같은 시각의 원문과 번역은 하나의 가사로 함께 표시합니다.
+  return lines.reduce<LyricLine[]>((grouped, line) => {
+    const previous = grouped[grouped.length - 1];
+    if (previous && previous.timeSecs === line.timeSecs) {
+      if (line.text) previous.text = previous.text ? `${previous.text}\n${line.text}` : line.text;
+    } else grouped.push({ ...line });
+    return grouped;
+  }, []);
 }
 
 export function findActiveLyricIndex(lines: LyricLine[], positionSecs: number): number {
@@ -51,7 +85,12 @@ export function findActiveLyricIndex(lines: LyricLine[], positionSecs: number): 
       break;
     }
   }
-  return activeIdx;
+  while (activeIdx >= 0) {
+    const active = lines[activeIdx];
+    if (active.endTimeSecs === undefined || positionSecs < active.endTimeSecs) return activeIdx;
+    activeIdx--;
+  }
+  return -1;
 }
 
 export function buildDisplayLyricLines(
