@@ -17,6 +17,8 @@ pub struct FileStamp {
     pub lrc_mtime: Option<i64>,
     pub vtt_size: Option<i64>,
     pub vtt_mtime: Option<i64>,
+    pub vtt_appended_size: Option<i64>,
+    pub vtt_appended_mtime: Option<i64>,
 }
 
 impl FileStamp {
@@ -34,21 +36,26 @@ impl FileStamp {
             lrc_mtime: None,
             vtt_size: None,
             vtt_mtime: None,
+            vtt_appended_size: None,
+            vtt_appended_mtime: None,
         }
     }
 
     pub fn of_path(path: &Path) -> std::io::Result<Self> {
         let mut stamp = Self::of(&std::fs::metadata(path)?);
-        for extension in ["lrc", "vtt"] {
-            match std::fs::metadata(path.with_extension(extension)) {
+        for (index, path) in crate::lyrics::sidecar_paths(path).iter().enumerate() {
+            match std::fs::metadata(path) {
                 Ok(meta) => {
                     let sidecar = Self::of(&meta);
-                    if extension == "lrc" {
+                    if index == 0 {
                         stamp.lrc_size = Some(sidecar.size);
                         stamp.lrc_mtime = Some(sidecar.mtime);
-                    } else {
+                    } else if index == 1 {
                         stamp.vtt_size = Some(sidecar.size);
                         stamp.vtt_mtime = Some(sidecar.mtime);
+                    } else {
+                        stamp.vtt_appended_size = Some(sidecar.size);
+                        stamp.vtt_appended_mtime = Some(sidecar.mtime);
                     }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -249,6 +256,8 @@ impl Database {
             ("lrc_mtime", "INTEGER"),
             ("vtt_size", "INTEGER"),
             ("vtt_mtime", "INTEGER"),
+            ("vtt_appended_size", "INTEGER"),
+            ("vtt_appended_mtime", "INTEGER"),
             ("metadata_revision", "INTEGER NOT NULL DEFAULT 0"),
             ("cover_present", "INTEGER"),
         ] {
@@ -337,7 +346,7 @@ impl Database {
         };
         let existing: Option<ExistingTrack> = conn
             .query_row(
-                "SELECT id, cover_data_url, synced_lyrics, plain_lyrics, lyric_offset_ms, is_favorite, play_count, (lrc_size IS NOT NULL OR vtt_size IS NOT NULL) FROM tracks WHERE file_path = ?1",
+                "SELECT id, cover_data_url, synced_lyrics, plain_lyrics, lyric_offset_ms, is_favorite, play_count, (lrc_size IS NOT NULL OR vtt_size IS NOT NULL OR vtt_appended_size IS NOT NULL) FROM tracks WHERE file_path = ?1",
                 params![track.file_path],
                 |row| {
                     Ok((
@@ -390,6 +399,8 @@ impl Database {
                     lrc_mtime = CASE WHEN ?22 IS NOT NULL THEN ?25 ELSE lrc_mtime END,
                     vtt_size = CASE WHEN ?22 IS NOT NULL THEN ?26 ELSE vtt_size END,
                     vtt_mtime = CASE WHEN ?22 IS NOT NULL THEN ?27 ELSE vtt_mtime END,
+                    vtt_appended_size = CASE WHEN ?22 IS NOT NULL THEN ?28 ELSE vtt_appended_size END,
+                    vtt_appended_mtime = CASE WHEN ?22 IS NOT NULL THEN ?29 ELSE vtt_appended_mtime END,
                     metadata_revision = metadata_revision + 1,
                     cover_present = (?15 IS NOT NULL AND length(?15) > 0)
                 WHERE id = ?21",
@@ -420,7 +431,9 @@ impl Database {
                     stamp.and_then(|s| s.lrc_size),
                     stamp.and_then(|s| s.lrc_mtime),
                     stamp.and_then(|s| s.vtt_size),
-                    stamp.and_then(|s| s.vtt_mtime)
+                    stamp.and_then(|s| s.vtt_mtime),
+                    stamp.and_then(|s| s.vtt_appended_size),
+                    stamp.and_then(|s| s.vtt_appended_mtime)
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -431,12 +444,12 @@ impl Database {
                     file_path, file_name, folder_path, title, artist, album, album_artist,
                     track_number, year, genre, duration_secs, bitrate, sample_rate, channels,
                     format, cover_data_url, synced_lyrics, plain_lyrics, lyric_offset_ms,
-                    mbid_recording, mbid_release, is_favorite, play_count, file_size, file_mtime, lrc_size, lrc_mtime, vtt_size, vtt_mtime, cover_present
+                    mbid_recording, mbid_release, is_favorite, play_count, file_size, file_mtime, lrc_size, lrc_mtime, vtt_size, vtt_mtime, vtt_appended_size, vtt_appended_mtime, cover_present
                 ) VALUES (
                     ?1, ?2, ?3, ?4, ?5, ?6, ?7,
                     ?8, ?9, ?10, ?11, ?12, ?13, ?14,
                     ?15, ?16, ?17, ?18, ?19,
-                    ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, (?16 IS NOT NULL AND length(?16) > 0)
+                    ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, (?16 IS NOT NULL AND length(?16) > 0)
                 )",
                 params![
                     track.file_path,
@@ -467,7 +480,9 @@ impl Database {
                     stamp.and_then(|s| s.lrc_size),
                     stamp.and_then(|s| s.lrc_mtime),
                     stamp.and_then(|s| s.vtt_size),
-                    stamp.and_then(|s| s.vtt_mtime)
+                    stamp.and_then(|s| s.vtt_mtime),
+                    stamp.and_then(|s| s.vtt_appended_size),
+                    stamp.and_then(|s| s.vtt_appended_mtime)
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -483,7 +498,7 @@ impl Database {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let (root, prefix) = folder_bounds(root);
         let sql = format!(
-            "SELECT id, file_path, file_size, file_mtime, lrc_size, lrc_mtime, vtt_size, vtt_mtime FROM tracks WHERE {}",
+            "SELECT id, file_path, file_size, file_mtime, lrc_size, lrc_mtime, vtt_size, vtt_mtime, vtt_appended_size, vtt_appended_mtime FROM tracks WHERE {}",
             folder_predicate("folder_path")
         );
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
@@ -499,6 +514,8 @@ impl Database {
                         lrc_mtime: row.get(5)?,
                         vtt_size: row.get(6)?,
                         vtt_mtime: row.get(7)?,
+                        vtt_appended_size: row.get(8)?,
+                        vtt_appended_mtime: row.get(9)?,
                     }),
                     _ => None,
                 };
@@ -936,6 +953,44 @@ mod tests {
     }
 
     #[test]
+    fn appended_vtt_changes_are_indexed_and_cached_without_losing_the_other_sidecar() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("01-가사 인식 확인.wav");
+        std::fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tone.wav"),
+            &path,
+        ).unwrap();
+        let paths = crate::lyrics::sidecar_paths(&path);
+        let db = Database::new(Path::new(":memory:")).unwrap();
+        let original = FileStamp::of_path(&path).unwrap();
+        let id = db.upsert_tracks(&[(crate::tags::read_track_from_path(&path).unwrap(), original)]).unwrap()[0];
+        let vtt = "WEBVTT\n\n00:00:13.070 --> 00:00:16.398\n확장자를 포함한 VTT\n";
+        std::fs::write(&paths[2], vtt).unwrap();
+        let appended = FileStamp::of_path(&path).unwrap();
+        assert_ne!(appended, original);
+        assert!(appended.vtt_size.is_none());
+        assert!(appended.vtt_appended_size.is_some());
+        db.upsert_tracks(&[(crate::tags::read_track_from_path(&path).unwrap(), appended)]).unwrap();
+        assert_eq!(db.get_public_track(id).unwrap().plain_lyrics.as_deref(), Some("확장자를 포함한 VTT"));
+        let cached = db.get_file_stamps_under(&dir.path().to_string_lossy()).unwrap();
+        assert_eq!(cached.get(path.to_str().unwrap()).unwrap().1, Some(appended));
+        std::fs::write(&paths[1], vtt.replace("확장자를 포함한 VTT", "기본 VTT 우선")).unwrap();
+        let both = FileStamp::of_path(&path).unwrap();
+        assert_ne!(both, appended);
+        assert_eq!(crate::tags::read_track_from_path(&path).unwrap().plain_lyrics.as_deref(), Some("기본 VTT 우선"));
+        std::fs::write(&paths[2], vtt.replace("확장자를 포함한 VTT", "변경한 외부 가사 파일 내용")).unwrap();
+        assert_ne!(FileStamp::of_path(&path).unwrap(), both);
+        std::fs::remove_file(&paths[1]).unwrap();
+        let changed = FileStamp::of_path(&path).unwrap();
+        db.upsert_tracks(&[(crate::tags::read_track_from_path(&path).unwrap(), changed)]).unwrap();
+        assert_eq!(db.get_public_track(id).unwrap().plain_lyrics.as_deref(), Some("변경한 외부 가사 파일 내용"));
+        std::fs::remove_file(&paths[2]).unwrap();
+        db.upsert_tracks(&[(crate::tags::read_track_from_path(&path).unwrap(), FileStamp::of_path(&path).unwrap())]).unwrap();
+        assert!(db.get_public_track(id).unwrap().synced_lyrics.is_none());
+        assert!(db.get_public_track(id).unwrap().plain_lyrics.is_none());
+    }
+
+    #[test]
     fn sidecar_edits_and_deletions_change_the_index_stamp() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("track.wav");
@@ -982,6 +1037,8 @@ mod tests {
             lrc_mtime: None,
             vtt_size: None,
             vtt_mtime: None,
+            vtt_appended_size: None,
+            vtt_appended_mtime: None,
         };
 
         db.upsert_tracks(&[(sample_track(fp), stamp)]).unwrap();

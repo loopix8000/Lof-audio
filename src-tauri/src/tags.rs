@@ -109,11 +109,11 @@ pub fn read_track_from_path(path: &Path) -> Option<Track> {
         album_artist = artist.clone();
     }
 
-    // 같은 이름의 외부 가사는 LRC, VTT 순서로 확인합니다.
-    for extension in ["lrc", "vtt"] {
-        if let Ok(content) = fs::read_to_string(path.with_extension(extension)) {
+    // 확장자 앞뒤에 붙인 가사 파일명을 같은 순서로 확인합니다.
+    for (index, sidecar) in crate::lyrics::sidecar_paths(path).iter().enumerate() {
+        if let Ok(content) = fs::read_to_string(sidecar) {
             let trimmed = content.trim_start_matches('\u{feff}').trim().to_string();
-            if extension == "vtt" && crate::lyrics::parse_vtt(&trimmed).is_empty() { continue; }
+            if index > 0 && crate::lyrics::parse_vtt(&trimmed).is_empty() { continue; }
             if !trimmed.is_empty() {
                 synced_lyrics = Some(trimmed.clone());
                 plain_lyrics = Some(strip_lrc_timestamps(&trimmed));
@@ -239,9 +239,16 @@ fn write_track_inner(track: &Track, save_lrc_file: bool) -> Result<(), String> {
         return Err("VTT 가사에 올바른 시간 구간이 없습니다.".into());
     }
     let mut sidecars = Vec::new();
-    for extension in ["lrc", "vtt"] {
-        let sidecar = path.with_extension(extension);
-        let create = save_lrc_file && (extension == "vtt") == is_vtt;
+    let paths = crate::lyrics::sidecar_paths(path);
+    // 기존 VTT가 있으면 파일명 형식을 유지하고 불필요한 중복 파일을 만들지 않습니다.
+    let create_index = if is_vtt {
+        (1..paths.len()).find(|&index| paths[index].is_file()).unwrap_or(1)
+    } else {
+        0
+    };
+    for (index, sidecar) in paths.into_iter().enumerate() {
+        let extension = if index == 0 { "lrc" } else { "vtt" };
+        let create = save_lrc_file && index == create_index;
         if !create && !sidecar.exists() { continue; }
         if sidecar.is_dir() {
             return Err(format!("{} 경로가 디렉터리여서 저장할 수 없습니다.", extension.to_uppercase()));
@@ -546,6 +553,29 @@ mod tests {
         )
         .unwrap();
         (dir, path)
+    }
+
+    #[test]
+    fn appended_vtt_sidecar_loads_and_updates_without_creating_another_file() {
+        let (_dir, path) = audio_copy();
+        let appended = path.with_file_name("tone.wav.vtt");
+        let vtt = "WEBVTT\n\n00:00:13.070 --> 00:00:16.398\n외부 VTT 가사\n";
+        fs::write(&appended, vtt).unwrap();
+        let mut track = read_track_from_path(&path).unwrap();
+        assert_eq!(track.synced_lyrics.as_deref(), Some(vtt.trim()));
+        assert_eq!(track.plain_lyrics.as_deref(), Some("외부 VTT 가사"));
+        track.synced_lyrics = Some(vtt.replace("외부 VTT 가사", "수정한 가사"));
+        write_track(&track, true).unwrap();
+        assert!(!path.with_extension("vtt").exists());
+        assert!(fs::read_to_string(&appended).unwrap().contains("수정한 가사"));
+        track.synced_lyrics = Some("[00:01.000]LRC로 변경\n[00:02.000]".into());
+        write_track(&track, false).unwrap();
+        assert_eq!(read_track_from_path(&path).unwrap().plain_lyrics.as_deref(), Some("LRC로 변경"));
+        track.synced_lyrics = None;
+        track.plain_lyrics = None;
+        write_track(&track, false).unwrap();
+        assert!(!appended.exists());
+        assert!(read_track_from_path(&path).unwrap().synced_lyrics.is_none());
     }
 
     #[test]

@@ -1,3 +1,16 @@
+use std::path::{Path, PathBuf};
+
+/// LRC, 확장자를 바꾼 VTT, 음원 파일명 뒤에 붙인 VTT 순서로 확인합니다.
+pub(crate) fn sidecar_paths(audio_path: &Path) -> [PathBuf; 3] {
+    let mut appended = audio_path.as_os_str().to_os_string();
+    appended.push(".vtt");
+    [
+        audio_path.with_extension("lrc"),
+        audio_path.with_extension("vtt"),
+        PathBuf::from(appended),
+    ]
+}
+
 #[derive(Debug, PartialEq)]
 pub(crate) struct Cue {
     pub start: f64,
